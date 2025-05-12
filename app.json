@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "TrackBudget Pro",
+    "slug": "trackbudgetpro",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "budgettracker",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alhajerytech.trackbudgetpro",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to scan receipts for expense tracking.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photos to upload receipts for expense tracking."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.alhajerytech.trackbudgetpro",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://trackbudgetpro.com"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan receipts for expense tracking."
+        }
+      ],
+      "expo-in-app-purchases"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/b15c6085-cbc9-4e70-9163-61b86314111c"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b15c6085-cbc9-4e70-9163-61b86314111c"
+      },
+      "router": {
+        "origin": "https://trackbudgetpro.com"
+      }
+    },
+    "owner": "alhajerytech",
+    "jsEngine": "jsc"
+  }
+}
