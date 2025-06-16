@@ -1,0 +1,164 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function hasValidSubscription() {
+      return isAuthenticated() &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.subscription.status == 'active';
+    }
+    
+    function isValidImageFile() {
+      return request.resource.contentType.matches('image/.*') &&
+        request.resource.size < 10 * 1024 * 1024; // 10MB limit
+    }
+    
+    function isValidReceiptFile() {
+      return request.resource.contentType.matches('image/.*') &&
+        request.resource.size < 5 * 1024 * 1024 && // 5MB limit for receipts
+        request.resource.size > 1024; // Minimum 1KB to prevent empty files
+    }
+    
+    // Receipt images - users can only access their own receipts
+    match /receipts/{userId}/{fileName} {
+      allow read: if isOwner(userId) || isAdmin();
+      
+      allow write: if isOwner(userId) && 
+        hasValidSubscription() && // Receipt storage is premium feature
+        isValidReceiptFile() &&
+        hasReceiptStorageQuota(userId);
+        
+      allow delete: if isOwner(userId) || isAdmin();
+      
+      function hasReceiptStorageQuota(userId) {
+        // Check user's current storage usage (simplified - in practice, use Cloud Functions)
+        return firestore.get(/databases/(default)/documents/users/$(userId)/stats/storage).data.receiptsSize < 100 * 1024 * 1024; // 100MB limit
+      }
+    }
+    
+    // Profile images
+    match /profiles/{userId}/{fileName} {
+      allow read: if isAuthenticated(); // Public read for profile images
+      allow write: if isOwner(userId) && 
+        isValidImageFile() &&
+        fileName.matches('.*\\.(jpg|jpeg|png|webp)$'); // Only specific image formats
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // User avatars (alternative location)
+    match /users/{userId}/avatar.{extension} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) && 
+        isValidImageFile() &&
+        extension in ['jpg', 'jpeg', 'png', 'webp'];
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // Backup files - users can backup their data
+    match /backups/{userId}/{fileName} {
+      allow read, write: if isOwner(userId) && 
+        hasValidSubscription(); // Backup is premium feature
+      allow read: if isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // App assets and system files
+    match /system/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Category icons (app-wide default icons)
+    match /icons/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Temporary files for processing
+    match /temp/{userId}/{fileName} {
+      allow read, write, delete: if isOwner(userId) && 
+        isValidImageFile();
+        
+      // Auto-delete temp files after 1 hour (handled by Cloud Functions)
+    }
+    
+    // Export files - generated reports and data exports
+    match /exports/{userId}/{fileName} {
+      allow read: if isOwner(userId) && hasValidSubscription();
+      allow write: if false; // Only server-side functions generate exports
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // Admin uploads and assets
+    match /admin/{fileName} {
+      allow read, write, delete: if isAdmin();
+    }
+    
+    // App updates and assets
+    match /updates/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Analytics data exports (for admin)
+    match /analytics/{fileName} {
+      allow read, write, delete: if isAdmin();
+    }
+    
+    // Support attachments - for customer support tickets
+    match /support/{ticketId}/{fileName} {
+      allow read: if isAuthenticated() && (
+        firestore.get(/databases/(default)/documents/feedback/$(ticketId)).data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      
+      allow write: if isAuthenticated() && 
+        firestore.get(/databases/(default)/documents/feedback/$(ticketId)).data.userId == request.auth.uid &&
+        isValidImageFile();
+        
+      allow delete: if isAdmin();
+    }
+    
+    // Receipt templates and samples (for ML training)
+    match /ml-training/{fileName} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    // User data exports (GDPR compliance)
+    match /gdpr-exports/{userId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Only server-side functions generate GDPR exports
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+    
+    // Rate limiting for uploads (basic implementation)
+    match /rate-limit/{userId} {
+      allow read: if isOwner(userId);
+      allow write: if false; // Only server-side functions manage rate limits
+    }
+    
+    // Admin can access everything
+    match /{allPaths=**} {
+      allow read, write, delete: if isAdmin();
+    }
+    
+    // Default deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

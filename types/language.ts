@@ -1,422 +1,302 @@
+export type SupportedLanguage = "en" | "es" | "ar";
+
 export interface Translation {
-  // Common
-  appName: string;
+  // General
+  dashboard: string;
+  categories: string;
+  transactions: string;
+  settings: string;
+  profile: string;
+  signIn: string;
   save: string;
   cancel: string;
   delete: string;
   edit: string;
   add: string;
-  close: string;
-  success: string;
-  error: string;
-  errorOccurred: string;
-  sessionExpiredPleaseLogin: string; // Added
-  authenticationRequiredToViewDashboard: string; // Added
 
-  // Dashboard
-  dashboard: string;
+  // Budget overview
   budgetDashboard: string;
   budgetOverview: string;
-  thisMonth: string;
-  remaining: string;
   income: string;
   spent: string;
-  categories: string;
-  topCategories: string;
-  seeAll: string;
-  welcomeToBudget: string;
-  startBySettingIncome: string;
+  remaining: string;
+  totalBudget: string;
+
+  // Income
   setIncome: string;
-  updateIncome: string;
-  youHaventCreatedCategories: string;
-  createCategories: string;
+  startBySettingIncome: string;
+  setAsDefaultIncome: string;
+  setForCurrentMonthOnly: string;
+  defaultIncomeDescription: string;
+  monthlyIncomeDescription: string;
+  incomeUpdated: string;
+  enterIncome: string;
+  incomeInputAccessibilityLabel: string;
+  incomeInputAccessibilityHint: string;
+  submitIncomeAccessibilityLabel: string;
+  submitIncomeAccessibilityHint: string;
+  invalidIncome: string;
+  incomePlaceholder: string;
+  default: string;
+  thisMonthOnly: string;
+  setIncomeFirst: string;
 
   // Categories
-  category: string;
+  addCategory: string;
   categoryName: string;
   monthlyBudget: string;
   icon: string;
   color: string;
-  addCategory: string;
-  noCategoriesYet: string;
-  createBudgetCategories: string;
-  setYourIncomeFirst: string;
-  pleaseSetIncome: string;
-  goToDashboard: string;
-  overBy: string;
-  of: string;
+  setAsDefaultBudget: string;
+  defaultBudgetDescription: string;
+  monthlyBudgetDescription: string;
+  topCategories: string;
+  seeAll: string;
+  youHaventCreatedCategories: string;
+  createCategories: string;
 
   // Transactions
-  transactions: string;
-  transaction: string;
   addTransaction: string;
-  noTransactionsYet: string;
-  startTrackingExpenses: string;
-  createCategoriesFirst: string;
-  needToCreateCategories: string;
   description: string;
-  whatWasThisExpenseFor: string;
-  receipt: string;
+  amount: string;
+  date: string;
+  category: string;
+
+  // Receipt scanner
   scanReceipt: string;
+  needCameraPermission: string;
+  grantPermission: string;
+  positionReceiptWithinFrame: string;
+  processing: string;
+  scanningReceipt: string;
+  retake: string;
+  useReceipt: string;
+  receipt: string;
+  merchant: string;
+  total: string;
+  close: string;
+
+  // Settings
+  language: string;
+  theme: string;
+  currency: string;
+  notifications: string;
+  exportData: string;
+  importData: string;
+  resetData: string;
+  about: string;
+  feedback: string;
+
+  // Authentication
+  login: string;
+  signup: string;
+  email: string;
+  password: string;
+  forgotPassword: string;
+  dontHaveAccount: string;
+  alreadyHaveAccount: string;
+
+  // Errors
+  error: string;
+  somethingWentWrong: string;
+  tryAgain: string;
+
+  // Empty states
+  noTransactions: string;
+  noCategories: string;
+  addYourFirst: string;
+
+  // Additional keys needed for the app
+  expenses: string;
+  balance: string;
+  budget: string;
+  overview: string;
+  categoryBudget: string;
+  categoryColor: string;
+  addingTo: string;
+  loading: string;
+  errorOccurred: string;
+  success: string;
+  back: string;
+  next: string;
+  done: string;
+  confirm: string;
+  unknown: string;
+  logout: string;
+  transactionAmount: string;
+  transactionDate: string;
+  transactionCategory: string;
+  transactionDescription: string;
+  noTransactionsYet: string;
+  noCategoriesYet: string;
+  addYourFirstCategory: string;
+  addYourFirstTransaction: string;
+  notification: string;
+  rateApp: string;
+  shareApp: string;
+  privacyPolicy: string;
+  termsOfService: string;
+  version: string;
+  lightTheme: string;
+  darkTheme: string;
+  systemTheme: string;
+  english: string;
+  arabic: string;
+  january: string;
+  february: string;
+  march: string;
+  april: string;
+  may: string;
+  june: string;
+  july: string;
+  august: string;
+  september: string;
+  october: string;
+  november: string;
+  december: string;
+  sendFeedback: string;
+  feedbackType: string;
+  feedbackMessage: string;
+  feedbackSuccess: string;
+  confirmDelete: string;
+  areYouSureDeleteCategory: string;
+  areYouSureDeleteTransaction: string;
+  invalidAmount: string;
+  requiredField: string;
+  invalidEmail: string;
+  invalidPassword: string;
+  failedToLoadReceiptImage: string;
+  appName: string;
+  editCategory: string;
+  deleteCategory: string;
+  editTransaction: string;
+  deleteTransaction: string;
+  welcomeToBudget: string;
+  updateIncome: string;
+  overBy: string;
+  of: string;
+  areYouSureToLogout: string;
+  user: string;
+  standardUser: string;
+  appVersion: string;
+
+  // Subscription Page
+  unlockFullAccess: string;
+  subscribeToBudgetTracker: string;
+  subscriptionBenefits: string;
+  benefit1: string;
+  benefit2: string;
+  benefit3: string;
+  alreadySubscribed: string;
+  budgetTracker: string;
+  retrySubscription: string;
+
+  // Currency selector
+  searchCurrency: string;
+  currenciesAvailable: string;
+  currenciesList: string;
+
+  // Category card
+  pressToViewTransactions: string;
+
+  // Transaction type
+  transactionType: string;
+
+  // Category validation
+  categoryNameRequired: string;
+  categoryNameTooLong: string;
+  invalidCharacters: string;
+  budgetRequired: string;
+  enterValidAmount: string;
+  categoryNamePlaceholder: string;
+  iconSelection: string;
+  submitCategoryDetails: string;
+
+  // Receipt and Transaction Additional Keys
+  aiPoweredScan: string;
+  receiptUploaded: string;
+  change: string;
+  enterDescription: string;
+  whatWasThisExpenseFor: string;
   receiptCaptured: string;
   changeReceipt: string;
-  spendingSummary: string;
-  totalSpent: string;
-  average: string;
-  spendingByCategory: string;
-  last7Days: string;
-  recentTransactions: string;
+  addingTransactionFor: string;
+  expense: string;
   transactionAdded: string;
   errorAddingTransaction: string;
 
-  // Settings
-  settings: string;
-  appSettings: string;
-  notifications: string;
-  manageBudgetAlerts: string;
-  darkMode: string;
-  language: string;
-  baseCurrency: string;
-  current: string;
-  budgetData: string;
-  budgetSummary: string;
-  resetAllData: string;
-  deleteAllBudgetInfo: string;
-  feedback: string;
-  sendFeedback: string;
-  requestFeaturesReportIssues: string;
-  about: string;
-  helpAndSupport: string;
-  aboutBudgetTracker: string;
-  aboutAppDescription: string;
-  version: string;
+  // Chart labels
+  monthlySummary: string;
+  totalSpent: string;
+  average: string;
+  spendingByCategory: string;
+  lastWeekSpending: string;
+  todaySpending: string;
+  lastNDaysSpending: string;
+  recentTransactions: string;
+  increasing: string;
+  decreasing: string;
+  stable: string;
 
-  // Currency
-  selectCurrency: string;
-  searchCurrencies: string;
-  currencyChanged: string;
-  currencyChangeApplied: string;
-  changeCurrencyTitle: string;
-  changeCurrencyWarning: string;
-  resetAndChange: string;
-  changeOnly: string;
-  currencyChangedAndDataReset: string;
+  // Budget summary page
+  budgetSummaryDescription: string;
+  whatIsBudgetSummary: string;
+  budgetSummaryExplanation: string;
+  howToUse: string;
+  budgetSummaryUsage: string;
 
-  // Receipt Scanner
-  scanningReceipt: string;
-  positionReceiptWithinFrame: string;
-  useReceipt: string;
-  retake: string;
-  processing: string;
-  needCameraPermission: string;
-  grantPermission: string;
+  // Component translations
+  pleaseFixErrors: string;
+  pleaseCompleteAllFields: string;
+  pleaseEnterValidAmount: string;
+  comingSoon: string;
+  receiptScannerComingSoon: string;
+  firstAvailableMonth: string;
+  home: string;
 
-  // Feedback
-  feedbackType: string;
-  featureRequest: string;
-  reportBug: string;
-  general: string;
-  yourFeedback: string;
-  describeFeature: string;
-  describeIssue: string;
-  shareThoughts: string;
-  sending: string;
-  pleaseEnterYourFeedback: string;
-  feedbackContainsInvalidContent: string;
-
-  // Alerts
-  resetAllDataTitle: string;
-  resetAllDataMessage: string;
-  reset: string;
-  thankYou: string;
-  feedbackSubmitted: string;
-  dataResetComplete: string;
-  allDataHasBeenReset: string;
-
-  // Receipt Details
-  receiptDetails: string;
-  merchant: string;
-  date: string;
-  total: string;
-  items: string;
-  downloadReceipt: string;
-  receiptNotFound: string;
-  goBack: string;
-
-  // Admin Panel
-  adminPanel: string;
-  adminPanelDescription: string;
-  analyticsDashboard: string;
-  userManagement: string;
-  userFeedbackSuggestions: string;
-  appSettingsAdmin: string;
-  totalUsers: string;
-  activeUsers: string;
-  newThisMonth: string;
-  avgSession: string;
-  totalTransactions: string;
-  totalMoneyManaged: string;
-  viewDetailedReports: string;
-  viewAllUsers: string;
-  viewAllFeedback: string;
-  updateCurrencyRates: string;
-  sendGlobalNotification: string;
-  manageAppFeatures: string;
-  deactivate: string;
-  activate: string;
-  markAsRead: string;
-  logoutAdmin: string;
-  logout: string;
-  areYouSureToLogout: string;
-  noUsersAvailable: string;
-  noFeedbackAvailable: string;
-  active: string;
-  inactive: string;
-  appSettingsAdminDescription: string;
-  areYouSureToPerformAction: string;
-  thisUser: string;
-  userHasBeen: string;
-  markThisFeedbackAsRead: string;
-  feedbackMarkedAsRead: string;
-
-  // Enhanced Admin Panel
-  overview: string;
-  users: string;
-  day: string;
-  week: string;
-  month: string;
-  year: string;
-  userMetrics: string;
-  performanceMetrics: string;
-  topCountries: string;
-  country: string;
-  revenue: string;
-  totalRevenue: string;
-  avgTransactionValue: string;
-  monthlyRevenue: string;
-  conversionRate: string;
-  appCrashes: string;
-  avgLoadTime: string;
-  retentionRate: string;
-  exportReport: string;
-  detailedAnalytics: string;
-  searchUsers: string;
-  filter: string;
-  export: string;
-  user: string;
-  email: string;
-  status: string;
-  actions: string;
-  noUsersFound: string;
-  searchFeedback: string;
-  noFeedbackFound: string;
-  from: string;
-  setPriority: string;
-  priority: string;
-  low: string;
-  medium: string;
-  high: string;
-  priorityUpdated: string;
-  areYouSureToDeleteFeedback: string;
-  feedbackDeleted: string;
-  selectPriorityLevel: string;
-  appConfiguration: string;
-  securitySettings: string;
-  systemMonitoring: string;
-  manageUserRoles: string;
-  viewAuditLogs: string;
-  systemAlerts: string;
-  showSystemAlerts: string;
-  hideSystemAlerts: string;
-  systemPerformance: string;
-  resolve: string;
-  ignore: string;
-  alertResolved: string;
-  alertIgnored: string;
-  exportSuccess: string;
-  dataExportedSuccessfully: string;
-  sendNotification: string;
-  enterNotificationMessage: string;
-  send: string;
-  notificationSent: string;
-
-  // Subscription Metrics
-  subscriptionRevenue: string;
-  monthlyRecurringRevenue: string;
-  annualRecurringRevenue: string;
-  revenueGrowth: string;
-  averageRevenuePerUser: string;
-  subscriptionMetrics: string;
-  totalSubscribers: string;
-  activeSubscriptions: string;
-  canceledSubscriptions: string;
-  avgSubscriptionLength: string;
-  subscriptionPlans: string;
-  plan: string;
-  subscribers: string;
-  churnRate: string;
-  revenueByCountry: string;
-  exportRevenueReport: string;
-  updateSubscriptionPlans: string;
-  manageFeatures: string;
-  price: string;
-  monthlyPlan: string;
-  yearlyPlan: string;
-
-  // Additional keys for settings functionality
-  account: string;
-  accessAdminControls: string;
-  signOutOfYourAccount: string;
-  loginSignUp: string;
-  accessYourAccount: string;
-  dataManagement: string;
-  exportData: string;
-  saveYourBudgetData: string;
-  importData: string;
-  restoreYourBudgetData: string;
-  madeWithLove: string;
-  logoutConfirmation: string;
-  logoutWithReset: string;
-  notificationsEnabled: string;
-  notificationsDisabled: string;
-  notificationsEnabledMessage: string;
-  notificationsDisabledMessage: string;
-  helpAndSupportMessage: string;
-  contactSupport: string;
-  visitFAQ: string;
-  privacyPolicy: string;
-  termsOfService: string;
-  importSuccess: string;
-  dataImportedSuccessfully: string;
-  importDataConfirmation: string;
-  import: string;
-  invalidImportFile: string;
-
-  // Additional keys for signin and admin
-  profile: string;
-  signIn: string;
-  administrator: string;
-  standardUser: string;
-  appVersion: string;
-  exportError: string;
-  filterUsers: string;
-  selectFilterOptions: string;
-  filterByStatus: string;
-  selectStatus: string;
-  all: string;
-  filterByPlan: string;
-  selectPlan: string;
-  monthly: string;
-  yearly: string;
-  resetFilters: string;
-  filterFeedback: string;
-  filterByType: string;
-  selectType: string;
-  filterByPriority: string;
-  selectPriority: string;
-  filterByReadStatus: string;
-  selectReadStatus: string;
-  read: string;
-  unread: string;
-  thisFeatureIsComingSoon: string;
-
-  // AddCategoryModal validation errors
-  categoryNameRequired: string;
-  categoryNameTooLong: string;
-  categoryNameInvalid: string;
-  budgetRequired: string;
-  budgetInvalid: string;
-
-  // Login/Signup/Validation
-  emailRequired: string;
-  emailInvalid: string;
-  passwordRequired: string;
-  passwordMinLength: string;
-  passwordNumber: string;
-  passwordSpecial: string;
-  passwordUppercase: string;
-  passwordLowercase: string;
-  confirmPasswordRequired: string;
-  passwordsDoNotMatch: string;
-  nameRequired: string;
-  loginFailed: string;
-  loginError: string;
-  loginTooManyAttempts: string;
-  loginNote: string;
-  loginWelcome: string;
-  loginSubtitle: string;
-  loginButton: string;
-  signupPrompt: string;
-  signupLink: string;
-  signupTitle: string;
-  signupSubtitle: string;
-  signupButton: string;
-  signupFailed: string;
-  signupError: string;
-  signupNote: string;
-  alreadyHaveAccount: string;
-  adminAccessDenied: string;
-  adminAccessDeniedDesc: string;
-  adminDashboardTitle: string;
-  adminDashboardWelcome: string;
-  adminUserManagement: string;
-  adminUserManagementDesc1: string;
-  adminUserManagementDesc2: string;
-  adminAnalytics: string;
-  adminAnalyticsDesc1: string;
-  adminAnalyticsDesc2: string;
-  adminSettings: string;
-  adminSettingsDesc1: string;
-  adminSettingsDesc2: string;
-
-  // Not Found / 404
-  notFoundTitle: string;
-  notFoundMessage: string;
-  goHome: string;
-
-  // Modal
-  modalTitle: string;
-  modalDescription: string;
-
-  // AddTransactionModal
-  amountRequired: string;
-  amountPlaceholder: string;
-  descriptionRequired: string;
-  descriptionTooLong: string;
-  descriptionInvalid: string;
-  categoryRequired: string;
-  addingToMonth: string;
-
-  lastLogin: string;
-  continueAsGuest: string;
-  guestLimitReached: string;
+  // Subscription
+  premiumSubscription: string;
+  unlockFinancialPotential: string;
+  unlimitedCategoriesTransactions: string;
+  noLimitsOrganization: string;
+  advancedAnalytics: string;
+  deepSpendingInsights: string;
+  excelExport: string;
+  professionalReports: string;
+  removeAds: string;
+  cleanExperience: string;
+  prioritySupport: string;
+  getHelpWhenNeeded: string;
+  cancelAnytimeNoFees: string;
+  whatsIncluded: string;
+  premiumActive: string;
+  until: string;
+  upgradeToPremium: string;
+  currentlyDemoMode: string;
   upgradeToUnlock: string;
-
-  // Onboarding/Tour
-  onboardingWelcomeTitle: string;
-  onboardingWelcomeDesc: string;
-  onboardingAddTransactionTitle: string;
-  onboardingAddTransactionDesc: string;
-  onboardingCategoriesTitle: string;
-  onboardingCategoriesDesc: string;
-  onboardingPrivacyTitle: string;
-  onboardingPrivacyDesc: string;
-  step: string;
-  next: string;
-  finish: string;
-
-  setAsDefaultIncome: string;
-  setAsDefaultCategoryBudget: string;
-  usingDefaultIncome: string;
-  usingDefaultCategoryBudgets: string;
-  overrideForThisMonth: string;
+  securePaymentCancel: string;
+  manageSubscriptionIOS: string;
+  manageSubscriptionAndroid: string;
+  subscriptionManagedByStore: string;
+  subscriptionStatus: string;
+  activeUntil: string;
+  subscribed: string;
+  notSubscribed: string;
+  guestLimitReached: string;
+  guestCategoryLimitMessage: string;
+  guestTransactionLimitMessage: string;
+  createFreeAccount: string;
 }
 
+export type LanguageCode = "en" | "es" | "ar";
+
 export interface LanguageState {
-  language: "en" | "ar";
-  translations: Record<"en" | "ar", Translation>;
-  t: (key: keyof Translation) => string;
-  setLanguage: (language: "en" | "ar") => void;
+  language: LanguageCode;
   isRTL: boolean;
-  resetLanguage: () => void;
+  setLanguage: (language: LanguageCode) => void;
+  t: (
+    key: keyof Translation,
+    params?: Record<string, string | number>
+  ) => string;
+  resetLanguage?: () => void;
 }

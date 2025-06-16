@@ -1,84 +1,127 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BudgetState, Category, Transaction, Currency } from "@/types/budget";
-import * as budgetApi from "@/lib/budget-api";
-import * as receiptApi from "@/lib/receipt-api";
-
-// Get current date in YYYY-MM format
-const getCurrentMonth = () => {
-  const date = new Date();
-  return `${date.getFullYear()}-${(date.getMonth() + 1)
-    .toString()
-    .padStart(2, "0")}`;
-};
+import { BudgetState, Category, Transaction, Currency } from "../types/budget";
+import LocalNotificationManager from "../utils/LocalNotificationManager";
 
 const useBudgetStore = create<BudgetState>()(
   persist(
     (set, get) => ({
       income: 0,
+      monthlyIncomes: {}, // Store income values for specific months
       categories: [],
       transactions: [],
       baseCurrency: "USD",
       currencies: [],
       receipts: {},
-      selectedMonth: getCurrentMonth(), // Format: YYYY-MM (current month)
-      defaultIncome: 0,
-      defaultCategoryBudgets: {},
+      selectedMonth: new Date().toISOString().slice(0, 7), // Format: YYYY-MM (current month)
 
-      setIncome: (income) => {
-        set({ income });
+      setIncome: (income: number, isDefault: boolean = true) => {
+        if (isDefault) {
+          set({ income });
+        } else {
+          const selectedMonth = get().selectedMonth;
+          set((state) => ({
+            monthlyIncomes: {
+              ...state.monthlyIncomes,
+              [selectedMonth]: income,
+            },
+          }));
+        }
       },
 
-      setDefaultIncome: (income) => {
-        set({ defaultIncome: income });
+      setMonthlyIncome: (month: string, income: number) => {
+        set((state) => ({
+          monthlyIncomes: {
+            ...state.monthlyIncomes,
+            [month]: income,
+          },
+        }));
       },
 
-      setDefaultCategoryBudgets: (categories) => {
-        set({ defaultCategoryBudgets: categories });
+      getIncomeForMonth: (month: string) => {
+        const { income, monthlyIncomes } = get();
+        // Return the month-specific income if it exists, otherwise return the default income
+        return monthlyIncomes[month] !== undefined
+          ? monthlyIncomes[month]
+          : income;
       },
 
-      addCategory: (category) => {
+      addCategory: (category: Omit<Category, "id" | "spent">) => {
         const newCategory: Category = {
           id: Date.now().toString(),
           ...category,
           spent: 0,
+          monthlyBudgets: {}, // Store budgets for specific months
         };
         set((state) => ({
           categories: [...state.categories, newCategory],
         }));
       },
 
-      updateCategory: (id, updatedCategory) => {
-        set((state) => ({
-          categories: state.categories.map((category) =>
+      updateCategory: (
+        id: string,
+        updatedCategory: Partial<Omit<Category, "id">>
+      ) => {
+        set((state: BudgetState) => ({
+          categories: state.categories.map((category: Category) =>
             category.id === id ? { ...category, ...updatedCategory } : category
           ),
         }));
       },
 
-      deleteCategory: (id) => {
-        set((state) => ({
-          categories: state.categories.filter((category) => category.id !== id),
+      setCategoryMonthlyBudget: (
+        categoryId: string,
+        month: string,
+        budget: number
+      ) => {
+        set((state: BudgetState) => ({
+          categories: state.categories.map((category: Category) => {
+            if (category.id === categoryId) {
+              return {
+                ...category,
+                monthlyBudgets: {
+                  ...(category.monthlyBudgets || {}),
+                  [month]: budget,
+                },
+              };
+            }
+            return category;
+          }),
+        }));
+      },
+
+      deleteCategory: (id: string) => {
+        set((state: BudgetState) => ({
+          categories: state.categories.filter(
+            (category: Category) => category.id !== id
+          ),
           transactions: state.transactions.filter(
-            (transaction) => transaction.categoryId !== id
+            (transaction: Transaction) => transaction.categoryId !== id
           ),
         }));
       },
 
-      addTransaction: (transaction) => {
+      addTransaction: (
+        transaction: Omit<Transaction, "id"> & { id?: string }
+      ) => {
         const { baseCurrency, currencies, selectedMonth } = get();
         const transactionId = Date.now().toString();
+        if (!transaction.userId) {
+          throw new Error("Transaction must include userId");
+        }
 
         // Handle currency conversion if needed
         let convertedAmount = transaction.amount;
         if (transaction.currency && transaction.currency !== baseCurrency) {
           const fromCurrency = currencies.find(
-            (c) => c.code === transaction.currency
+            (c: Currency) => c.code === transaction.currency
           );
-          const toCurrency = currencies.find((c) => c.code === baseCurrency);
+          const toCurrency = currencies.find(
+            (c: Currency) => c.code === baseCurrency
+          );
 
-          if (fromCurrency && toCurrency) {
+          if (fromCurrency?.rate && toCurrency?.rate) {
             // Convert to base currency
             convertedAmount =
               (transaction.amount / fromCurrency.rate) * toCurrency.rate;
@@ -86,108 +129,98 @@ const useBudgetStore = create<BudgetState>()(
         }
 
         // Set the transaction date to be within the selected month
-        // Use the current day if it's the current month, otherwise use the 1st of the month
         const currentDate = new Date();
         const selectedMonthDate = new Date(selectedMonth + "-01");
         const isCurrentMonth =
           currentDate.getFullYear() === selectedMonthDate.getFullYear() &&
           currentDate.getMonth() === selectedMonthDate.getMonth();
 
-        const transactionDate = isCurrentMonth
-          ? currentDate.toISOString()
-          : new Date(selectedMonth + "-01").toISOString();
-
         const newTransaction: Transaction = {
           id: transactionId,
           ...transaction,
-          date: transactionDate,
-          originalAmount:
-            transaction.currency !== baseCurrency
-              ? transaction.amount
-              : undefined,
+          date: isCurrentMonth
+            ? currentDate.toISOString()
+            : new Date(selectedMonth + "-01").toISOString(),
+          amount: convertedAmount,
         };
-
-        // Update the spent amount for the category
-        const { categories } = get();
-        const updatedCategories = categories.map((category) => {
-          if (category.id === transaction.categoryId) {
-            return {
-              ...category,
-              spent: category.spent + convertedAmount,
-            };
-          }
-          return category;
-        });
-
-        set((state) => ({
+        set((state: BudgetState) => ({
           transactions: [...state.transactions, newTransaction],
-          categories: updatedCategories,
         }));
 
-        return transactionId;
+        // Update category spent amounts after adding a transaction
+        const currentState = get();
+
+        // Always update all category spent amounts to ensure consistency
+        // This ensures any transaction type changes are correctly reflected
+        currentState.updateCategorySpentAmounts();
+
+        return transactionId; // Ensure the function returns a string
       },
 
-      deleteTransaction: (id) => {
+      deleteTransaction: (id: string) => {
         const { transactions, categories, receipts } = get();
-        const transaction = transactions.find((t) => t.id === id);
+        const transaction = transactions.find((t: Transaction) => t.id === id);
 
         if (!transaction) return;
 
-        // Calculate the amount to subtract (handle currency conversion)
-        let amountToSubtract = transaction.amount;
-        if (transaction.originalAmount !== undefined) {
-          // If there was a currency conversion, use the converted amount
-          amountToSubtract = transaction.amount;
-        }
+        // Remove the transaction from the store
+        set((state: BudgetState) => ({
+          transactions: state.transactions.filter(
+            (t: Transaction) => t.id !== id
+          ),
+        }));
 
-        const updatedCategories = categories.map((category) => {
-          if (category.id === transaction.categoryId) {
-            return {
-              ...category,
-              spent: Math.max(0, category.spent - amountToSubtract),
-            };
-          }
-          return category;
-        });
+        // Update all category spent amounts after removing
+        get().updateCategorySpentAmounts();
+
+        // Clean up any associated receipts
+        if (transaction.receiptImageUri) {
+          const updatedReceipts = { ...get().receipts };
+          delete updatedReceipts[transaction.id];
+          set((state: BudgetState) => ({
+            ...state,
+            receipts: updatedReceipts,
+          }));
+        }
 
         // Remove receipt if exists
         const updatedReceipts = { ...receipts };
         if (updatedReceipts[id]) {
           delete updatedReceipts[id];
-        }
 
-        set({
-          transactions: transactions.filter((t) => t.id !== id),
-          categories: updatedCategories,
-          receipts: updatedReceipts,
-        });
+          set({
+            receipts: updatedReceipts,
+          });
+        }
       },
 
-      setBaseCurrency: (currencyCode) => {
+      setBaseCurrency: (currencyCode: string) => {
         // Set the base currency
         set({ baseCurrency: currencyCode });
       },
 
-      updateCurrencyRates: (updatedCurrencies) => {
-        set((state) => ({
-          currencies: state.currencies.map((currency) => {
+      updateCurrencyRates: (updatedCurrencies: Partial<Currency>[]) => {
+        set((state: BudgetState) => ({
+          currencies: state.currencies.map((currency: Currency) => {
             const updated = updatedCurrencies.find(
-              (c) => c.code === currency.code
+              (c: Partial<Currency>) => c.code === currency.code
             );
             return updated ? { ...currency, ...updated } : currency;
           }),
         }));
       },
 
-      addReceipt: (transactionId, imageUri, receiptData) => {
-        // Store the receipt image
-        set((state) => ({
+      addReceipt: (
+        transactionId: string,
+        imageUri: string,
+        receiptData?: any
+      ) => {
+        set((state: BudgetState) => ({
           receipts: {
             ...state.receipts,
             [transactionId]: imageUri,
           },
-          // Update transaction with receipt data if provided
-          transactions: state.transactions.map((transaction) =>
+          transactions: state.transactions.map((transaction: Transaction) =>
             transaction.id === transactionId
               ? { ...transaction, receiptData }
               : transaction
@@ -195,20 +228,18 @@ const useBudgetStore = create<BudgetState>()(
         }));
       },
 
-      deleteReceipt: (transactionId) => {
-        set((state) => {
+      deleteReceipt: (transactionId: string) => {
+        set((state: BudgetState) => {
           const updatedReceipts = { ...state.receipts };
           delete updatedReceipts[transactionId];
-
           return {
             receipts: updatedReceipts,
-            // Remove receipt data from transaction
-            transactions: state.transactions.map((transaction) =>
+            transactions: state.transactions.map((transaction: Transaction) =>
               transaction.id === transactionId
                 ? {
                     ...transaction,
                     receiptData: undefined,
-                    receiptImage: undefined,
+                    receiptImageUri: undefined,
                   }
                 : transaction
             ),
@@ -216,195 +247,97 @@ const useBudgetStore = create<BudgetState>()(
         });
       },
 
-      setSelectedMonth: (month) => {
-        set({ selectedMonth: month });
+      setSelectedMonth: (month: string) => {
+        const isValidMonth =
+          month && typeof month === "string" && /^\d{4}-\d{2}$/.test(month);
+        set({
+          selectedMonth: isValidMonth
+            ? month
+            : new Date().toISOString().slice(0, 7),
+        });
       },
 
       resetBudgetData: () => {
         set({
           income: 0,
+          monthlyIncomes: {},
           categories: [],
           transactions: [],
           receipts: {},
-          // Keep baseCurrency and currencies
         });
       },
 
-      // Backend-integrated actions
-      fetchBudgetFromBackend: async (year: number, month: number) => {
-        const budget = await budgetApi.fetchBudget(year, month);
-        if (budget) {
-          // Fetch categories to get details but don't set them to state yet
-          const categoriesFromBackend = await budgetApi.fetchCategories();
+      // Returns the earliest month for which the user has set an income (default or month-specific)
+      getFirstIncomeMonth: (): string | null => {
+        const { income, monthlyIncomes, transactions } = get();
 
-          // Only set categories related to this month's budget
-          set({
-            income: budget.income,
-            // Only include categories with a non-zero budget for the selected month
-            categories: Object.entries(budget.categories)
-              .filter(([_, amount]) => typeof amount === "number" && amount > 0)
-              .map(([id, amount]) => {
-                const cat = categoriesFromBackend.find((c: any) => c.id === id);
-                return {
-                  id,
-                  name: cat?.name || "",
-                  color: cat?.color || "",
-                  icon: cat?.icon || "",
-                  spent: 0,
-                  budget: typeof amount === "number" ? amount : 0,
-                };
-              }),
-          });
-        } else {
-          // Use defaults if no explicit month data
-          const { defaultIncome, defaultCategoryBudgets } = get();
-          const categoriesFromBackend = await budgetApi.fetchCategories();
-          set({
-            income: defaultIncome,
-            categories: Object.entries(defaultCategoryBudgets)
-              .filter(([_, amount]) => typeof amount === "number" && amount > 0)
-              .map(([id, amount]) => {
-                const cat = categoriesFromBackend.find((c: any) => c.id === id);
-                return {
-                  id,
-                  name: cat?.name || "",
-                  color: cat?.color || "",
-                  icon: cat?.icon || "",
-                  spent: 0,
-                  budget: typeof amount === "number" ? amount : 0,
-                };
-              }),
-          });
+        // First priority: Check if there are any month-specific incomes set
+        // This is the hard boundary that users should never be able to go before
+        if (Object.keys(monthlyIncomes).length > 0) {
+          // Sort chronologically and return the earliest month
+          return Object.keys(monthlyIncomes).sort()[0];
         }
 
-        // Always fetch transactions for the same month
-        await get().fetchTransactionsFromBackend?.(year, month);
-      },
-      setBudgetToBackend: async (
-        year: number,
-        month: number,
-        income: number,
-        categories: Record<string, number>
-      ) => {
-        await budgetApi.setBudget(year, month, income, categories);
-        // Optionally re-fetch
-        await get().fetchBudgetFromBackend?.(year, month);
-      },
-      fetchCategoriesFromBackend: async () => {
-        // Fetch categories but don't automatically set them in the store
-        // This way they won't overwrite our per-month filtered categories
-        const categories = await budgetApi.fetchCategories();
-        // Transform them to match our frontend Category type that includes budget and spent
-        return categories.map((c: any) => ({
-          ...c,
-          budget: c.budget || 0,
-          spent: 0,
-        }));
-      },
-      createCategoryInBackend: async (
-        name: string,
-        color: string,
-        icon: string
-      ) => {
-        // Restore to previous: do not return backend Category, just void
-        await budgetApi.createCategory(name, color, icon);
-        // After creating a category, always re-fetch the budget for the current month
-        // This will ensure the UI is up-to-date with only relevant categories
-        const [year, month] = get().selectedMonth.split("-").map(Number);
-        await get().fetchBudgetFromBackend?.(year, month);
-      },
-      updateCategoryInBackend: async (
-        id: string,
-        name: string,
-        color: string,
-        icon: string
-      ) => {
-        await budgetApi.updateCategory(id, name, color, icon);
-        // After updating a category, re-fetch the budget for the current month
-        const [year, month] = get().selectedMonth.split("-").map(Number);
-        await get().fetchBudgetFromBackend?.(year, month);
-      },
-      deleteCategoryInBackend: async (id: string) => {
-        await budgetApi.deleteCategory(id);
-        // After deleting a category, re-fetch the budget for the current month
-        const [year, month] = get().selectedMonth.split("-").map(Number);
-        await get().fetchBudgetFromBackend?.(year, month);
-      },
-      fetchTransactionsFromBackend: async (year: number, month: number) => {
-        const transactions = await budgetApi.fetchTransactions(year, month);
+        // Second priority: If there's a default income set, use current month
+        // Default income applies to all months, so we use current month as boundary
+        if (income > 0) {
+          return new Date().toISOString().slice(0, 7);
+        }
 
-        // Only set transactions for the requested month
-        // Format the month for comparison
-        const monthString = `${year}-${month.toString().padStart(2, "0")}`;
+        // Third priority: If no income at all but there are transactions,
+        // use the earliest transaction month as the boundary
+        if (transactions.length > 0) {
+          return transactions
+            .map((t: Transaction) => t.date.slice(0, 7))
+            .sort()[0];
+        }
 
-        set({
-          transactions: transactions
-            .filter((t: any) => t.date.startsWith(monthString))
-            .map((t: any) => ({
-              ...t,
-              description: t.description ?? "",
-            })),
+        // If nothing else is set, default to current month
+        return new Date().toISOString().slice(0, 7);
+      }, // Helper to update category spent values based on transactions
+      updateCategorySpentAmounts: () => {
+        const { categories, transactions, selectedMonth } = get();
+
+        // Create a copy of categories to update
+        const updatedCategories = categories.map((category: Category) => {
+          // Find all transactions for this category that are expenses
+          // Also handle legacy transactions that might not have a type field
+          const categoryTransactions = transactions.filter(
+            (t: Transaction) =>
+              t.categoryId === category.id && (t.type === "expense" || !t.type)
+          );
+
+          // Calculate the total spent amount
+          const totalSpent = categoryTransactions.reduce(
+            (sum: number, transaction: Transaction) => sum + transaction.amount,
+            0
+          );
+
+          // Get the budget for this category (monthly or default)
+          const monthlyBudget = category.monthlyBudgets?.[selectedMonth];
+          const budget =
+            monthlyBudget !== undefined ? monthlyBudget : category.budget;
+
+          // Check if budget is exceeded and send notification
+          const previousSpent = category.spent || 0;
+          if (totalSpent > budget && previousSpent <= budget && budget > 0) {
+            // Budget just exceeded, send notification
+            LocalNotificationManager.sendCategoryBudgetAlert(
+              category.name,
+              totalSpent,
+              budget
+            );
+          }
+
+          // Return updated category with correct spent amount
+          return {
+            ...category,
+            spent: totalSpent,
+          };
         });
-      },
-      createTransactionInBackend: async (
-        input: Omit<Transaction, "id">,
-        year: number,
-        month: number
-      ) => {
-        await budgetApi.createTransaction(input, year, month);
 
-        // Re-fetch budget which will also fetch transactions and update category spent amounts
-        await get().fetchBudgetFromBackend?.(year, month);
-      },
-      updateTransactionInBackend: async (input: Transaction) => {
-        await budgetApi.updateTransaction(input);
-
-        // Use the transaction date to determine year/month for re-fetch
-        const date = new Date(input.date);
-        const year = date.getFullYear();
-        const month = date.getMonth() + 1;
-
-        // Re-fetch budget which will also fetch transactions and update category spent amounts
-        await get().fetchBudgetFromBackend?.(year, month);
-      },
-      deleteTransactionInBackend: async (
-        id: string,
-        year: number,
-        month: number
-      ) => {
-        await budgetApi.deleteTransaction(id);
-
-        // Re-fetch budget which will also fetch transactions and update category spent amounts
-        await get().fetchBudgetFromBackend?.(year, month);
-      },
-      // Receipt backend actions
-      fetchReceiptsFromBackend: async () => {
-        const receipts = await receiptApi.fetchReceipts();
-        // Map receipts to local store format (transactionId -> imageUrl)
-        const receiptsMap: Record<string, string> = {};
-        receipts.forEach((r: any) => {
-          receiptsMap[r.id] = r.imageUrl;
-        });
-        set({ receipts: receiptsMap });
-      },
-      uploadReceiptToBackend: async (imageUrl: string, data: any) => {
-        const receipt = await receiptApi.uploadReceipt(imageUrl, data);
-        // Optionally update local receipts state
-        set((state) => ({
-          receipts: { ...state.receipts, [receipt.id]: receipt.imageUrl },
-        }));
-        return receipt;
-      },
-      deleteReceiptFromBackend: async (id: string) => {
-        await receiptApi.deleteReceipt(id);
-        set((state) => {
-          const updatedReceipts = { ...state.receipts };
-          delete updatedReceipts[id];
-          return { receipts: updatedReceipts };
-        });
-      },
-      getReceiptFromBackend: async (id: string) => {
-        return await receiptApi.getReceipt(id);
+        // Update state with the recalculated spent amounts
+        set({ categories: updatedCategories });
       },
     }),
     {
@@ -412,13 +345,12 @@ const useBudgetStore = create<BudgetState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         income: state.income,
+        monthlyIncomes: state.monthlyIncomes,
         categories: state.categories,
         transactions: state.transactions,
         baseCurrency: state.baseCurrency,
         receipts: state.receipts,
         selectedMonth: state.selectedMonth,
-        defaultIncome: state.defaultIncome,
-        defaultCategoryBudgets: state.defaultCategoryBudgets,
         // Do not overwrite currencies with default, persist the actual state
         currencies:
           state.currencies.length > 0 ? state.currencies : defaultCurrencies,
@@ -428,6 +360,6 @@ const useBudgetStore = create<BudgetState>()(
 );
 
 // Import after the store definition to avoid circular dependency
-import { defaultCurrencies } from "@/constants/currencies";
+import { defaultCurrencies } from "../constants/currencies";
 
 export default useBudgetStore;

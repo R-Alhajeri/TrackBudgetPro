@@ -1,29 +1,56 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import useBudgetStore from "@/store/budget-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import useBudgetStore from "../store/budget-store";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
+import { useMonthContext } from "../store/month-context";
 
 const BudgetSummary = () => {
+  // Use the shared month context to ensure sync with MonthSelector
+  const { activeMonth } = useMonthContext();
   const {
     income,
-    defaultIncome,
     categories,
-    defaultCategoryBudgets,
     transactions,
     baseCurrency,
     currencies,
-    selectedMonth,
+    getIncomeForMonth,
   } = useBudgetStore();
+
+  // Use the activeMonth from context instead of selectedMonth from the store
+  const selectedMonth = activeMonth;
   const { colors } = useAppTheme();
-  const { t, isRTL, language } = useLanguageStore();
+  const { t, isRTL } = useLanguageStore();
+
+  // Get income for the selected month
+  const monthlyIncome = useMemo(() => {
+    return getIncomeForMonth(selectedMonth);
+  }, [getIncomeForMonth, selectedMonth]);
 
   // Filter transactions for the selected month
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((transaction) =>
-      transaction.date.startsWith(selectedMonth)
-    );
+    return transactions.filter((transaction) => {
+      // Extract YYYY-MM from the transaction date
+      const transactionMonth = transaction.date.substring(0, 7);
+      return transactionMonth === selectedMonth;
+    });
   }, [transactions, selectedMonth]);
+
+  // Calculate income and expenses separately
+  const { totalExpenses, totalIncome } = useMemo(() => {
+    return filteredTransactions.reduce(
+      (acc, transaction) => {
+        if (transaction.type === "income") {
+          acc.totalIncome += transaction.amount;
+        } else {
+          // Default to expense if type is not specified (for backwards compatibility)
+          acc.totalExpenses += transaction.amount;
+        }
+        return acc;
+      },
+      { totalExpenses: 0, totalIncome: 0 }
+    );
+  }, [filteredTransactions]);
 
   const totalSpent = useMemo(() => {
     return filteredTransactions.reduce(
@@ -32,36 +59,34 @@ const BudgetSummary = () => {
     );
   }, [filteredTransactions]);
 
-  // Calculate total budget as sum of all category budgets
+  // Calculate total budget as sum of all category budgets for this month
   const totalBudget = useMemo(() => {
-    return categories.reduce((sum, category) => sum + category.budget, 0);
-  }, [categories]);
+    return categories.reduce((sum, category) => {
+      // Get the budget for this specific month if it exists
+      const monthlyBudget = category.monthlyBudgets?.[selectedMonth];
+      return (
+        sum + (monthlyBudget !== undefined ? monthlyBudget : category.budget)
+      );
+    }, 0);
+  }, [categories, selectedMonth]);
 
-  const remaining = income - totalSpent;
+  const remaining = monthlyIncome - totalSpent;
   const budgetRemaining = totalBudget - totalSpent;
-  const spentPercentage = income > 0 ? (totalSpent / income) * 100 : 0;
+  const spentPercentage =
+    monthlyIncome > 0 ? (totalSpent / monthlyIncome) * 100 : 0;
   const budgetPercentage =
     totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
   const currencySymbol =
     currencies.find((c) => c.code === baseCurrency)?.symbol || baseCurrency;
 
-  // Show info if using default income or default category budgets
-  const isUsingDefaultIncome = income === defaultIncome && income > 0;
-  const isUsingDefaultCategoryBudgets =
-    categories.length > 0 &&
-    categories.every(
-      (cat) =>
-        defaultCategoryBudgets[cat.id] !== undefined &&
-        cat.budget === defaultCategoryBudgets[cat.id]
-    );
-
-  // Format the selected month for display using string, not Date object
-  const [year, month] = selectedMonth.split("-");
-  const formattedMonth = new Date(
-    Number(year),
-    Number(month) - 1,
-    1
-  ).toLocaleString(language === "ar" ? "ar" : "en", {
+  // Format the selected month for display
+  // Force selectedMonth to be a valid YYYY-MM string to avoid date parsing errors
+  const cleanMonth =
+    selectedMonth && selectedMonth.length >= 7
+      ? selectedMonth.substring(0, 7)
+      : new Date().toISOString().slice(0, 7);
+  const selectedMonthDate = new Date(cleanMonth + "-01");
+  const formattedMonth = selectedMonthDate.toLocaleString("default", {
     month: "long",
     year: "numeric",
   });
@@ -76,17 +101,6 @@ const BudgetSummary = () => {
           {formattedMonth}
         </Text>
       </View>
-
-      {isUsingDefaultIncome && (
-        <Text style={{ color: colors.info, marginBottom: 4 }}>
-          {t("usingDefaultIncome")}
-        </Text>
-      )}
-      {isUsingDefaultCategoryBudgets && (
-        <Text style={{ color: colors.info, marginBottom: 4 }}>
-          {t("usingDefaultCategoryBudgets")}
-        </Text>
-      )}
 
       <View style={styles.amountContainer}>
         <Text style={[styles.amountLabel, { color: colors.subtext }]}>
@@ -117,6 +131,10 @@ const BudgetSummary = () => {
               {
                 width: `${Math.min(spentPercentage, 100)}%`,
                 backgroundColor: remaining < 0 ? colors.danger : colors.primary,
+                shadowColor: remaining < 0 ? colors.danger : colors.primary,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.4,
+                shadowRadius: 3,
               },
             ]}
           />
@@ -128,23 +146,38 @@ const BudgetSummary = () => {
           <Text style={[styles.statLabel, { color: colors.subtext }]}>
             {t("income")}
           </Text>
+          <View
+            style={[
+              styles.statValueContainer,
+              isRTL && styles.rtlFlexRowReverse,
+            ]}
+          >
+            <Text style={[styles.statValue, { color: colors.text }]}>
+              {currencySymbol}
+              {monthlyIncome.toFixed(2)}
+            </Text>
+            {totalIncome > 0 && (
+              <Text
+                style={[styles.additionalIncome, { color: colors.success }]}
+              >
+                +{currencySymbol}
+                {totalIncome.toFixed(2)}
+              </Text>
+            )}
+          </View>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={[styles.statLabel, { color: colors.subtext }]}>
+            {t("expenses")}
+          </Text>
           <Text style={[styles.statValue, { color: colors.text }]}>
             {currencySymbol}
-            {income.toFixed(2)}
+            {totalExpenses.toFixed(2)}
           </Text>
         </View>
         <View style={styles.statItem}>
           <Text style={[styles.statLabel, { color: colors.subtext }]}>
-            {t("spent")}
-          </Text>
-          <Text style={[styles.statValue, { color: colors.text }]}>
-            {currencySymbol}
-            {totalSpent.toFixed(2)}
-          </Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[styles.statLabel, { color: colors.subtext }]}>
-            Total Budget
+            {t("totalBudget")}
           </Text>
           <Text style={[styles.statValue, { color: colors.text }]}>
             {currencySymbol}
@@ -158,53 +191,60 @@ const BudgetSummary = () => {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: 20,
   },
   rtlFlexRowReverse: {
     flexDirection: "row-reverse",
   },
   title: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600",
+    letterSpacing: 0.3,
   },
   period: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "500",
   },
   amountContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
     alignItems: "center",
   },
   amountLabel: {
-    fontSize: 14,
-    marginBottom: 4,
+    fontSize: 16,
+    marginBottom: 10,
+    letterSpacing: 0.2,
   },
   amount: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "700",
+    letterSpacing: 0.5,
   },
   progressContainer: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   progressBackground: {
-    height: 8,
-    borderRadius: 4,
+    height: 12,
+    borderRadius: 6,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    borderRadius: 4,
+    borderRadius: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   statsContainer: {
     flexDirection: "row",
@@ -212,14 +252,26 @@ const styles = StyleSheet.create({
   },
   statItem: {
     alignItems: "center",
+    paddingHorizontal: 10,
   },
   statLabel: {
     fontSize: 14,
-    marginBottom: 4,
+    marginBottom: 8,
+    letterSpacing: 0.2,
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+  statValueContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  additionalIncome: {
+    fontSize: 14,
+    fontWeight: "500",
+    marginLeft: 8,
   },
 });
 

@@ -1,122 +1,188 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { Category } from "@/types/budget";
+import { Category, Currency } from "../types/budget";
 import {
-  MaterialCommunityIcons,
-  FontAwesome5,
-  FontAwesome,
-  Feather,
-  Entypo,
-  AntDesign,
-} from "@expo/vector-icons";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
-import useBudgetStore from "@/store/budget-store";
+  ShoppingBag,
+  Home,
+  Car,
+  Utensils,
+  Plane,
+  Coffee,
+  Gift,
+  Heart,
+  DollarSign,
+  CreditCard,
+  Film,
+  Book,
+  Wifi,
+  Phone,
+  Briefcase,
+  ShoppingCart,
+  Bus,
+  Train,
+  Pill,
+  Gamepad,
+} from "lucide-react-native";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
+import useBudgetStore from "../store/budget-store";
+import {
+  BorderRadius,
+  Shadows,
+  Typography,
+  PressableStates,
+  Spacing,
+  CardStyles,
+} from "../constants/styleGuide";
 
 interface CategoryCardProps {
   category: Category;
   onPress: () => void;
-  spent?: number; // Optional override for spent value
 }
 
-const CategoryCard: React.FC<CategoryCardProps> = ({
-  category,
-  onPress,
-  spent,
-}) => {
+// Updated styles and layout to match the legacy design while preserving technical enhancements.
+const CategoryCard: React.FC<CategoryCardProps> = ({ category, onPress }) => {
   const { colors } = useAppTheme();
   const { t, isRTL } = useLanguageStore();
-  const { baseCurrency, currencies } = useBudgetStore();
-  const percentage =
-    category.budget > 0
-      ? ((spent !== undefined ? spent : category.spent) / category.budget) * 100
-      : 0;
-  const remaining =
-    category.budget - (spent !== undefined ? spent : category.spent);
+  const { baseCurrency, currencies, selectedMonth } = useBudgetStore();
+
+  // Get the budget for this specific month if it exists
+  const budget =
+    category.monthlyBudgets?.[selectedMonth] !== undefined
+      ? category.monthlyBudgets[selectedMonth]
+      : category.budget;
+
+  const spent = category.spent || 0;
+  const percentage = budget > 0 ? (spent / budget) * 100 : 0;
+  const remaining = budget - spent;
   const isOverBudget = remaining < 0;
   const currencySymbol =
-    currencies.find((c) => c.code === baseCurrency)?.symbol || baseCurrency;
+    currencies.find((c: Currency) => c.code === baseCurrency)?.symbol ||
+    baseCurrency;
 
   const getIcon = () => {
     const iconProps = {
       size: 24,
       color: category.color,
+      strokeWidth: 2,
     };
 
     switch (category.icon) {
       case "shopping-bag":
-        return <FontAwesome5 name="shopping-bag" {...iconProps} />;
+        return <ShoppingBag {...iconProps} />;
       case "home":
-        return <AntDesign name="home" {...iconProps} />;
+        return <Home {...iconProps} />;
       case "car":
-        return <FontAwesome name="car" {...iconProps} />;
+        return <Car {...iconProps} />;
       case "utensils":
-        return <FontAwesome5 name="utensils" {...iconProps} />;
+        return <Utensils {...iconProps} />;
       case "plane":
-        return <FontAwesome name="plane" {...iconProps} />;
+        return <Plane {...iconProps} />;
       case "coffee":
-        return <FontAwesome name="coffee" {...iconProps} />;
+        return <Coffee {...iconProps} />;
       case "gift":
-        return <FontAwesome name="gift" {...iconProps} />;
+        return <Gift {...iconProps} />;
       case "heart":
-        return <AntDesign name="hearto" {...iconProps} />;
+        return <Heart {...iconProps} />;
       case "dollar-sign":
-        return <FontAwesome name="dollar" {...iconProps} />;
+        return <DollarSign {...iconProps} />;
       case "credit-card":
-        return <FontAwesome name="credit-card" {...iconProps} />;
+        return <CreditCard {...iconProps} />;
       case "film":
-        return <FontAwesome name="film" {...iconProps} />;
+        return <Film {...iconProps} />;
       case "book":
-        return <FontAwesome name="book" {...iconProps} />;
+        return <Book {...iconProps} />;
       case "wifi":
-        return <Feather name="wifi" {...iconProps} />;
+        return <Wifi {...iconProps} />;
       case "phone":
-        return <Feather name="phone" {...iconProps} />;
+        return <Phone {...iconProps} />;
       case "briefcase":
-        return <Feather name="briefcase" {...iconProps} />;
+        return <Briefcase {...iconProps} />;
       case "shopping-cart":
-        return <Entypo name="shopping-cart" {...iconProps} />;
+        return <ShoppingCart {...iconProps} />;
       case "bus":
-        return <FontAwesome name="bus" {...iconProps} />;
+        return <Bus {...iconProps} />;
       case "train":
-        return <FontAwesome name="train" {...iconProps} />;
+        return <Train {...iconProps} />;
       case "pill":
-        return <MaterialCommunityIcons name="pill" {...iconProps} />;
+        return <Pill {...iconProps} />;
       case "gamepad":
-        return <FontAwesome name="gamepad" {...iconProps} />;
+        return <Gamepad {...iconProps} />;
       default:
-        return <FontAwesome5 name="shopping-bag" {...iconProps} />;
+        return <ShoppingBag {...iconProps} />;
     }
   };
 
+  // Get status color based on percentage spent
+  const getStatusColor = () => {
+    if (isOverBudget) return colors.danger;
+    if (percentage >= 90) return "#FFA500"; // Orange warning color
+    if (percentage >= 75) return "#FFC107"; // Amber warning color
+    return colors.success;
+  };
+
+  const statusColor = getStatusColor();
+
   return (
     <Pressable
-      style={[styles.container, { backgroundColor: colors.card }]}
+      style={({ pressed }) => [
+        styles.container,
+        CardStyles.elevated(colors.card),
+        {
+          borderRadius: 16,
+          marginBottom: 12,
+        },
+        Shadows.medium,
+        isOverBudget && {
+          borderLeftColor: colors.danger,
+          borderLeftWidth: 4,
+        },
+        pressed && PressableStates.pressed,
+      ]}
       onPress={onPress}
+      accessibilityLabel={`${category.name} ${t("category")}`}
+      accessibilityHint={t("pressToViewTransactions")}
     >
       <View style={[styles.header, isRTL && styles.rtlFlexRowReverse]}>
         <View
           style={[
             styles.iconContainer,
-            { backgroundColor: `${category.color}20` },
+            {
+              backgroundColor: `${category.color}15`,
+              borderColor: `${category.color}30`,
+            },
           ]}
         >
           {getIcon()}
         </View>
         <View style={styles.titleContainer}>
-          <Text style={[styles.title, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.title,
+              { color: colors.text },
+              {
+                fontSize: (Typography.subtitle as any).fontSize,
+                fontWeight: (Typography.subtitle as any).fontWeight,
+                lineHeight: (Typography.subtitle as any).lineHeight,
+              },
+            ]}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
             {category.name}
           </Text>
           <Text
             style={[
-              styles.remaining,
-              { color: colors.subtext },
-              isOverBudget ? { color: colors.danger } : null,
+              styles.percentage,
+              { color: statusColor },
+              {
+                fontSize: (Typography.small as any).fontSize,
+                fontWeight: (Typography.small as any).fontWeight,
+                lineHeight: (Typography.small as any).lineHeight,
+              },
             ]}
           >
-            {isOverBudget ? t("overBy") : t("remaining") + ": "}
-            {currencySymbol}
-            {Math.abs(remaining).toFixed(2)}
+            {Math.round(percentage)}% {t("spent")}
           </Text>
         </View>
       </View>
@@ -125,7 +191,11 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
         <View
           style={[
             styles.progressBackground,
-            { backgroundColor: colors.border },
+            {
+              backgroundColor: `${colors.border}50`,
+              height: 6,
+              borderRadius: 3,
+            },
           ]}
         >
           <View
@@ -133,21 +203,75 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
               styles.progressFill,
               {
                 width: `${Math.min(percentage, 100)}%`,
-                backgroundColor: isOverBudget ? colors.danger : category.color,
+                backgroundColor: statusColor,
+                height: 6,
+                borderRadius: 3,
+                shadowColor: statusColor,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.5,
+                shadowRadius: 3,
               },
             ]}
           />
         </View>
-        <View style={[styles.budgetInfo, isRTL && styles.rtlFlexRowReverse]}>
-          <Text style={[styles.spent, { color: colors.text }]}>
-            {currencySymbol}
-            {(spent !== undefined ? spent : category.spent).toFixed(2)}
-          </Text>
-          <Text style={[styles.budget, { color: colors.subtext }]}>
-            {t("of")} {currencySymbol}
-            {category.budget.toFixed(2)}
-          </Text>
+      </View>
+
+      <View style={styles.body}>
+        <View style={styles.amountsRow}>
+          <View style={styles.amountContainer}>
+            <Text style={[styles.amountLabel, { color: colors.subtext }]}>
+              {t("spent")}
+            </Text>
+            <Text
+              style={[
+                styles.spent,
+                {
+                  color: colors.text,
+                  fontSize: (Typography.subtitle as any).fontSize,
+                  fontWeight: (Typography.subtitle as any).fontWeight,
+                  lineHeight: (Typography.subtitle as any).lineHeight,
+                },
+              ]}
+            >
+              {currencySymbol}
+              {spent.toFixed(2)}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.amountContainer}>
+            <Text style={[styles.amountLabel, { color: colors.subtext }]}>
+              {t("budget")}
+            </Text>
+            <Text
+              style={[
+                styles.budget,
+                { color: colors.text },
+                Typography.subtitle,
+              ]}
+            >
+              {currencySymbol}
+              {budget.toFixed(2)}
+            </Text>
+          </View>
         </View>
+
+        <Text
+          style={[
+            styles.remaining,
+            {
+              color: isOverBudget ? colors.danger : colors.success,
+              textAlign: "right",
+              fontSize: (Typography.caption as any).fontSize,
+              fontWeight: (Typography.caption as any).fontWeight,
+              letterSpacing: (Typography.caption as any).letterSpacing,
+            },
+          ]}
+        >
+          {isOverBudget ? t("overBy") : t("remaining")}: {currencySymbol}
+          {Math.abs(remaining).toFixed(2)}
+        </Text>
       </View>
     </Pressable>
   );
@@ -155,68 +279,84 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    marginBottom: Spacing.m,
+    width: "100%",
+    alignSelf: "center",
+    borderRadius: BorderRadius.large,
+    overflow: "hidden",
+    // Using CardStyles.elevated for actual styling
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
-  },
-  rtlFlexRowReverse: {
-    flexDirection: "row-reverse",
+    marginBottom: Spacing.m,
   },
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12,
+    borderRadius: BorderRadius.medium,
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
-    marginLeft: 12,
+    marginRight: Spacing.m,
+    borderWidth: 1,
   },
   titleContainer: {
     flex: 1,
   },
-  title: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 2,
+  body: {
+    marginTop: Spacing.m,
   },
-  remaining: {
-    fontSize: 14,
+  title: {
+    marginBottom: Spacing.xs,
+    fontWeight: "600",
+    // Using Typography.subtitle for text styling
+  },
+  percentage: {
+    // Typography.small applies here
   },
   progressContainer: {
-    marginTop: 4,
+    marginVertical: Spacing.s,
   },
   progressBackground: {
     height: 8,
-    borderRadius: 4,
+    borderRadius: BorderRadius.circle,
     overflow: "hidden",
   },
   progressFill: {
     height: "100%",
-    borderRadius: 4,
+    borderRadius: BorderRadius.circle,
   },
-  budgetInfo: {
+  amountsRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 4,
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.s,
+  },
+  amountContainer: {
+    flex: 1,
+  },
+  amountLabel: {
+    fontSize: 12,
+    marginBottom: 2,
   },
   spent: {
-    fontSize: 14,
-    fontWeight: "500",
+    // Using Typography.subtitle for text styling
   },
   budget: {
-    fontSize: 14,
-    marginLeft: 4,
-    marginRight: 4,
+    // Using Typography.subtitle for text styling
+  },
+  divider: {
+    width: 1,
+    height: 30,
+    backgroundColor: "rgba(150, 150, 150, 0.2)",
+    marginHorizontal: Spacing.m,
+  },
+  remaining: {
+    marginTop: Spacing.xs,
+    fontWeight: "500",
+  },
+  rtlFlexRowReverse: {
+    flexDirection: "row-reverse",
   },
 });
 

@@ -2,11 +2,24 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "jsx": "react-native",
     "esModuleInterop": true,
+    "target": "es2020",
+    "allowJs": true,
+    "skipLibCheck": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"] // Assuming you want to keep this path alias
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "types/**/*.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "lib/**/*.ts" // Added lib directory
+  ],
+  "exclude": [
+    // Add any specific exclusions for v3 if needed, otherwise defaults are fine
+    "node_modules"
+  ]
 }

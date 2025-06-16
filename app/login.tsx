@@ -11,18 +11,18 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { AntDesign } from "@expo/vector-icons";
-import useAuthStore from "@/store/auth-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import { Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react-native";
+import useAuthStore from "../store/auth-store";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
 import { useRouter } from "expo-router";
-import { loginWithBackend, guestLoginWithBackend } from "@/lib/auth-api";
+import * as Updates from "expo-updates";
 
 export default function LoginScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { t, isRTL } = useLanguageStore();
-  const { isAuthenticated, userRole } = useAuthStore();
+  const { login, isAuthenticated, userRole } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -30,16 +30,14 @@ export default function LoginScreen() {
   const [passwordError, setPasswordError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginAttempts, setLoginAttempts] = useState(0);
-  const [guestLoading, setGuestLoading] = useState(false);
 
   // If already authenticated, redirect to appropriate screen
   useEffect(() => {
     if (isAuthenticated) {
-      if (userRole === "admin") {
-        router.replace("/(tabs)/admin");
-      } else {
-        router.replace("/(tabs)");
-      }
+      // Always redirect to tabs, then navigate to admin if needed
+      router.replace("/(tabs)");
+
+      // We'll handle admin navigation from the settings screen instead
     }
   }, [isAuthenticated, userRole, router]);
 
@@ -52,20 +50,20 @@ export default function LoginScreen() {
 
     // Validate email
     if (!email.trim()) {
-      setEmailError(t("emailRequired"));
+      setEmailError("Email is required");
       isValid = false;
     } else {
       // Basic email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email.trim())) {
-        setEmailError(t("emailInvalid"));
+        setEmailError("Please enter a valid email address");
         isValid = false;
       }
     }
 
     // Validate password
     if (!password) {
-      setPasswordError(t("passwordRequired"));
+      setPasswordError("Password is required");
       isValid = false;
     }
 
@@ -79,54 +77,42 @@ export default function LoginScreen() {
 
     // Check for too many login attempts
     if (loginAttempts >= 5) {
-      Alert.alert(t("loginTooManyAttempts"), t("loginTooManyAttempts"), [
-        { text: "OK" },
-      ]);
+      Alert.alert(
+        "Too Many Attempts",
+        "You have made too many login attempts. Please try again later.",
+        [{ text: "OK" }]
+      );
       return;
     }
 
     setIsLoading(true);
-    console.log("Attempting login with email:", email);
 
     try {
-      console.log("Calling loginWithBackend...");
-      const success = await loginWithBackend(email, password);
-      console.log("Login result:", success ? "Success" : "Failed");
+      const success = await login(email, password);
 
       if (success) {
-        const { userRole, token } = useAuthStore.getState();
-        console.log("Login successful. User role:", userRole);
-        console.log("Token received:", token ? "Yes" : "No");
-
-        if (userRole === "admin") {
-          router.replace("/(tabs)/admin");
+        const role = useAuthStore.getState().userRole;
+        if (role === "admin") {
+          router.replace("/(admin)" as any);
         } else {
           router.replace("/(tabs)");
         }
       } else {
         setLoginAttempts((prev) => prev + 1);
-        Alert.alert(t("loginFailed"), t("loginError"), [{ text: "OK" }]);
+        Alert.alert(
+          "Login Failed",
+          "Invalid email or password. Please try again.",
+          [{ text: "OK" }]
+        );
       }
     } catch (error) {
-      Alert.alert(t("loginError"), t("errorOccurred"), [{ text: "OK" }]);
+      Alert.alert(
+        "Login Error",
+        "An unexpected error occurred. Please try again later.",
+        [{ text: "OK" }]
+      );
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleGuestLogin = async () => {
-    setGuestLoading(true);
-    try {
-      const success = await guestLoginWithBackend();
-      if (success) {
-        router.replace("/(tabs)");
-      } else {
-        Alert.alert(t("loginFailed"), t("errorOccurred"), [{ text: "OK" }]);
-      }
-    } catch (error) {
-      Alert.alert(t("loginError"), t("errorOccurred"), [{ text: "OK" }]);
-    } finally {
-      setGuestLoading(false);
     }
   };
 
@@ -135,7 +121,7 @@ export default function LoginScreen() {
   };
 
   const handleBackToHome = () => {
-    router.replace("/(tabs)");
+    router.replace("./(tabs)");
   };
 
   return (
@@ -144,14 +130,7 @@ export default function LoginScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
     >
       <View style={styles.content}>
-        {/* Back button that navigates to home */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={handleBackToHome}
-          testID="back-button"
-        >
-          <AntDesign name="arrowleft" size={24} color={colors.text} />
-        </TouchableOpacity>
+        {/* Removed in-content back button to avoid double arrow in header */}
 
         <View
           style={[
@@ -159,14 +138,12 @@ export default function LoginScreen() {
             { backgroundColor: `${colors.primary}20` },
           ]}
         >
-          <AntDesign name="lock" size={48} color={colors.primary} />
+          <Lock size={48} color={colors.primary} />
         </View>
 
-        <Text style={[styles.title, { color: colors.text }]}>
-          {t("loginWelcome")}
-        </Text>
+        <Text style={[styles.title, { color: colors.text }]}>Welcome Back</Text>
         <Text style={[styles.subtitle, { color: colors.subtext }]}>
-          {t("loginSubtitle")}
+          Log in to your account to continue
         </Text>
 
         <View
@@ -175,8 +152,7 @@ export default function LoginScreen() {
             { borderColor: emailError ? colors.danger : colors.border },
           ]}
         >
-          <AntDesign
-            name="mail"
+          <Mail
             size={20}
             color={emailError ? colors.danger : colors.subtext}
             style={styles.inputIcon}
@@ -189,7 +165,7 @@ export default function LoginScreen() {
                 textAlign: isRTL ? "right" : "left",
               },
             ]}
-            placeholder={t("emailRequired")}
+            placeholder="Email"
             placeholderTextColor={colors.subtext}
             value={email}
             onChangeText={(text) => {
@@ -213,8 +189,7 @@ export default function LoginScreen() {
             { borderColor: passwordError ? colors.danger : colors.border },
           ]}
         >
-          <AntDesign
-            name="lock"
+          <Lock
             size={20}
             color={passwordError ? colors.danger : colors.subtext}
             style={styles.inputIcon}
@@ -227,7 +202,7 @@ export default function LoginScreen() {
                 textAlign: isRTL ? "right" : "left",
               },
             ]}
-            placeholder={t("passwordRequired")}
+            placeholder="Password"
             placeholderTextColor={colors.subtext}
             secureTextEntry={!showPassword}
             value={password}
@@ -240,9 +215,9 @@ export default function LoginScreen() {
           />
           <Pressable onPress={togglePasswordVisibility} style={styles.eyeIcon}>
             {showPassword ? (
-              <AntDesign name="eyeo" size={20} color={colors.subtext} />
+              <EyeOff size={20} color={colors.subtext} />
             ) : (
-              <AntDesign name="eye" size={20} color={colors.subtext} />
+              <Eye size={20} color={colors.subtext} />
             )}
           </Pressable>
         </View>
@@ -261,54 +236,51 @@ export default function LoginScreen() {
           onPress={handleLogin}
           disabled={isLoading}
           testID="login-button"
+          accessibilityLabel="Login"
         >
           {isLoading ? (
             <ActivityIndicator size="small" color="white" />
           ) : (
-            <Text style={styles.loginButtonText}>{t("loginButton")}</Text>
+            <Text style={styles.loginButtonText}>Login</Text>
           )}
+        </Pressable>
+        <Pressable
+          style={[
+            styles.loginButton,
+            { backgroundColor: colors.danger, marginTop: 8 },
+          ]}
+          onPress={async () => {
+            // Clear all persisted auth state and reload app
+            await useAuthStore.persist.clearStorage();
+            if (typeof window !== "undefined") {
+              window.location.reload();
+            } else if (Updates.reloadAsync) {
+              await Updates.reloadAsync();
+            }
+          }}
+          accessibilityLabel="Reset Demo Data"
+        >
+          <Text style={styles.loginButtonText}>Reset Demo Data</Text>
         </Pressable>
 
         <View style={styles.signupContainer}>
           <Text style={[styles.signupText, { color: colors.subtext }]}>
-            {t("signupPrompt")}
+            {"Don't have an account?"}
           </Text>
           <TouchableOpacity
-            onPress={() => router.push("/signup")}
+            onPress={() => router.push("./signup")}
             testID="signup-link"
           >
             <Text style={[styles.signupLink, { color: colors.primary }]}>
-              {t("signupLink")}
+              Sign up
             </Text>
           </TouchableOpacity>
         </View>
 
-        <Pressable
-          style={[
-            styles.loginButton,
-            {
-              backgroundColor: colors.card,
-              marginTop: 12,
-              borderWidth: 1,
-              borderColor: colors.primary,
-            },
-            guestLoading && { opacity: 0.7 },
-          ]}
-          onPress={handleGuestLogin}
-          disabled={guestLoading}
-          testID="guest-login-button"
-        >
-          {guestLoading ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Text style={[styles.loginButtonText, { color: colors.primary }]}>
-              {t("continueAsGuest")}
-            </Text>
-          )}
-        </Pressable>
-
         <Text style={[styles.note, { color: colors.subtext }]}>
-          {t("loginNote")}
+          {
+            "Note: This is a mock login for demonstration. For testing, use:\n\nAdmin: admin@example.com / admin123\nUser: user@example.com / user123"
+          }
         </Text>
       </View>
     </KeyboardAvoidingView>

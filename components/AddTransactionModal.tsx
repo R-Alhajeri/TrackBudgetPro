@@ -12,17 +12,34 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { AntDesign, Feather } from "@expo/vector-icons";
-import useBudgetStore from "@/store/budget-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import { X, Camera, TrendingUp, TrendingDown } from "lucide-react-native";
+import useBudgetStore from "../store/budget-store";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
+import { useMonthContext } from "../store/month-context";
 import ReceiptScanner from "./ReceiptScanner";
 import { debounce } from "lodash";
+import { TransactionType, Transaction, Currency } from "../types/budget";
+import {
+  BorderRadius,
+  Typography,
+  Shadows,
+  Spacing,
+  PressableStates,
+  InputStyles,
+  CardStyles,
+} from "../constants/styleGuide";
+import useAuthStore from "../store/auth-store";
+import useSubscriptionStore from "../store/subscription-store";
+import { UpgradePromptModal } from "./UpgradePromptModal";
+import { trackEvent } from "../utils/analytics";
+import { useProgressiveRestrictions } from "../hooks/useProgressiveRestrictions";
 
 interface AddTransactionModalProps {
   visible: boolean;
   onClose: () => void;
   categoryId?: string;
+  userId?: string; // <-- add this
 }
 
 // Regex for validating numeric input with decimal
@@ -44,146 +61,219 @@ const HARMFUL_PATTERNS = [
   /[<>]/i, // HTML tags
 ];
 
+const validateDescription = (description: string): boolean => {
+  for (const pattern of HARMFUL_PATTERNS) {
+    if (pattern.test(description)) {
+      return false;
+    }
+  }
+  return true;
+};
+
 const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
   visible,
   onClose,
   categoryId,
+  userId, // <-- add this
 }) => {
-  const {
-    categories,
-    createTransactionInBackend,
-    baseCurrency,
-    currencies,
-    selectedMonth,
-    fetchBudgetFromBackend, // Add this to re-fetch budget after creating transaction
-  } = useBudgetStore();
+  const { categories, addTransaction, baseCurrency, currencies, transactions } =
+    useBudgetStore();
+  const { activeMonth } = useMonthContext();
   const { colors } = useAppTheme();
   const { t, isRTL } = useLanguageStore();
+  const { user } = useAuthStore();
+  const { isSubscribed, isDemoMode, isGuestMode } = useSubscriptionStore();
+  const { checkRestriction, trackRestrictionHit } =
+    useProgressiveRestrictions();
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState(
     categoryId || ""
   );
+  const [transactionType, setTransactionType] =
+    useState<TransactionType>("expense");
   const [receiptScannerVisible, setReceiptScannerVisible] = useState(false);
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [receiptData, setReceiptData] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Form validation errors
   const [amountError, setAmountError] = useState("");
   const [descriptionError, setDescriptionError] = useState("");
   const [categoryError, setCategoryError] = useState("");
 
+  // Fix currencies typing
   const selectedCurrencySymbol =
-    currencies.find((c) => c.code === baseCurrency)?.symbol || baseCurrency;
+    (currencies.find((c: Currency) => c.code === baseCurrency)
+      ?.symbol as string) || baseCurrency;
 
   // Format the selected month for display
-  const selectedMonthDate = new Date(selectedMonth + "-01");
+  const selectedMonthDate = new Date(activeMonth + "-01");
   const formattedMonth = selectedMonthDate.toLocaleString("default", {
     month: "long",
     year: "numeric",
   });
 
-  // Debounced validation functions to avoid excessive validation during typing
+  // Direct validation function (no debounce) for form submission
+  const validateAmountDirectly = (value: string) => {
+    if (!value.trim()) {
+      setAmountError("Amount is required");
+      return false;
+    }
+
+    if (!AMOUNT_REGEX.test(value)) {
+      setAmountError("Please enter a valid amount");
+      return false;
+    }
+
+    const amountValue = parseFloat(value);
+    if (isNaN(amountValue) || amountValue <= 0) {
+      setAmountError("Please enter a valid amount");
+      return false;
+    }
+
+    setAmountError("");
+    return true;
+  };
+
+  // Debounced version for input changes
   const validateAmount = useCallback(
     debounce((value: string) => {
-      if (!value.trim()) {
-        setAmountError(t("amountRequired"));
-        return false;
-      }
-
-      if (!AMOUNT_REGEX.test(value)) {
-        setAmountError(t("budgetInvalid"));
-        return false;
-      }
-
-      const amountValue = parseFloat(value);
-      if (isNaN(amountValue) || amountValue <= 0) {
-        setAmountError(t("budgetInvalid"));
-        return false;
-      }
-
-      setAmountError("");
-      return true;
+      validateAmountDirectly(value);
     }, 300),
-    [t]
+    []
   );
 
+  // Direct validation function for form submission
+  const validateDescriptionDirectly = (value: string) => {
+    if (!value.trim()) {
+      setDescriptionError("Description is required");
+      return false;
+    }
+
+    if (value.length > 100) {
+      setDescriptionError("Description must be less than 100 characters");
+      return false;
+    }
+
+    // Check for potentially harmful content
+    for (const pattern of HARMFUL_PATTERNS) {
+      if (pattern.test(value)) {
+        setDescriptionError("Description contains invalid characters");
+        return false;
+      }
+    }
+
+    setDescriptionError("");
+    return true;
+  };
+
+  // Debounced version for input changes
   const validateDescription = useCallback(
     debounce((value: string) => {
-      if (!value.trim()) {
-        setDescriptionError(t("descriptionRequired"));
-        return false;
-      }
-
-      if (value.length > 100) {
-        setDescriptionError(t("descriptionTooLong"));
-        return false;
-      }
-
-      // Check for potentially harmful content
-      for (const pattern of HARMFUL_PATTERNS) {
-        if (pattern.test(value)) {
-          setDescriptionError(t("descriptionInvalid"));
-          return false;
-        }
-      }
-
-      setDescriptionError("");
-      return true;
+      validateDescriptionDirectly(value);
     }, 300),
-    [t]
+    []
   );
 
   const validateCategory = useCallback(() => {
     if (!selectedCategoryId && !categoryId) {
-      setCategoryError(t("categoryRequired"));
+      setCategoryError("Please select a category");
       return false;
     }
 
     setCategoryError("");
     return true;
-  }, [selectedCategoryId, categoryId, t]);
+  }, [selectedCategoryId, categoryId]);
 
   const validateInputs = () => {
     // Cancel any pending debounced validations
     validateAmount.cancel();
     validateDescription.cancel();
 
-    // Run validations immediately
-    const isAmountValid = validateAmount.flush();
-    const isDescriptionValid = validateDescription.flush();
+    // Run validations directly instead of using debounced versions
+    const isAmountValid = validateAmountDirectly(amount);
+    const isDescriptionValid = validateDescriptionDirectly(description);
     const isCategoryValid = validateCategory();
 
     return isAmountValid && isDescriptionValid && isCategoryValid;
   };
 
-  const handleSubmit = async () => {
-    if (!validateInputs()) {
+  const handleSubmit = () => {
+    // Disable submit button while processing
+    setIsSubmitting(true);
+
+    // Check transaction limit for demo/guest mode users
+    const transactionLimitCheck = checkRestriction(
+      "transactionLimit",
+      transactions.length
+    );
+
+    if (
+      (isDemoMode || isGuestMode) &&
+      !isSubscribed &&
+      !transactionLimitCheck.allowed
+    ) {
+      setIsSubmitting(false);
+
+      // Track transaction limit hit for analytics
+      trackRestrictionHit("transactionLimit", transactions.length);
+
+      trackEvent("transaction_limit_hit", {
+        currentTransactionCount: transactions.length,
+        userType: isDemoMode ? "demo" : "guest",
+        attemptedAction: "add_transaction",
+      });
+
+      setShowUpgradeModal(true);
       return;
     }
-    setIsSubmitting(true);
-    setSubmitError("");
+
+    // Validate all inputs
+    if (!validateInputs()) {
+      setIsSubmitting(false); // Re-enable the button
+      Alert.alert(t("error"), t("pleaseFixErrors"), [{ text: "OK" }]);
+      return;
+    }
+
     try {
-      if (!createTransactionInBackend) throw new Error("Not implemented");
+      // Double check values one more time
+      if (
+        !amount.trim() ||
+        !description.trim() ||
+        (!selectedCategoryId && !categoryId)
+      ) {
+        throw new Error("Missing required fields");
+      }
+
+      // Sanitize inputs
       const sanitizedDescription = description.trim();
       const sanitizedAmount = parseFloat(amount);
-      const year = Number(selectedMonth.split("-")[0]);
-      const month = Number(selectedMonth.split("-")[1]);
-      await createTransactionInBackend(
-        {
-          categoryId: selectedCategoryId || categoryId || "",
-          amount: sanitizedAmount,
-          description: sanitizedDescription,
-          currency: baseCurrency,
-          receiptImage: receiptImage || undefined,
-          receiptData: receiptData || undefined,
-          date: new Date().toISOString(),
-        },
-        year,
-        month
-      );
+      if (isNaN(sanitizedAmount) || sanitizedAmount <= 0) {
+        throw new Error("Invalid amount");
+      }
+
+      if (!userId && (!user || !user.id) && !isGuestMode && !isDemoMode) {
+        throw new Error("No user is currently logged in");
+      }
+
+      // Add required 'date' property for Transaction type
+      const transactionData = {
+        id: Date.now().toString(), // Generate a unique ID
+        userId: userId || user?.id || "guest", // Use guest ID for guest/demo mode
+        categoryId: selectedCategoryId || categoryId || "",
+        amount: sanitizedAmount,
+        description: sanitizedDescription,
+        type: transactionType, // Include transaction type
+        currency: baseCurrency,
+        receiptImage: receiptImage || undefined,
+        receiptData: receiptData || undefined,
+        date: new Date().toISOString(), // Add required date property
+      };
+
+      const transactionId = addTransaction(transactionData);
+
       // Reset form
       setAmount("");
       setDescription("");
@@ -193,19 +283,27 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
       setAmountError("");
       setDescriptionError("");
       setCategoryError("");
+
+      // Show success message
+      Alert.alert(t("success"), t("addTransaction"), [{ text: "OK" }]);
+
       onClose();
-    } catch (e: any) {
-      // Handle guest/demo usage limit error
-      let errorMsg = t("errorOccurred");
-      if (typeof e?.message === "string") {
-        try {
-          const parsed = JSON.parse(e.message);
-          if (parsed.code === "GUEST_LIMIT_REACHED") {
-            errorMsg = t("guestLimitReached");
-          }
-        } catch {}
-      }
-      setSubmitError(errorMsg);
+    } catch (error) {
+      console.error("Error adding transaction:", error);
+
+      // Show appropriate error message
+      const errorMessage =
+        error instanceof Error ? error.message : t("somethingWentWrong");
+
+      Alert.alert(
+        t("error"),
+        errorMessage === "Missing required fields"
+          ? t("pleaseCompleteAllFields")
+          : errorMessage === "Invalid amount"
+          ? t("pleaseEnterValidAmount")
+          : t("somethingWentWrong"),
+        [{ text: "OK" }]
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -240,11 +338,6 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     setAmountError("");
     setDescriptionError("");
     setCategoryError("");
-
-    // Re-fetch budget data when closing the modal to ensure UI is updated
-    const [year, month] = selectedMonth.split("-").map(Number);
-    fetchBudgetFromBackend?.(year, month);
-
     onClose();
   };
 
@@ -253,20 +346,48 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
     if (text === "" || AMOUNT_REGEX.test(text)) {
       // Prevent multiple decimal points
       if (text.split(".").length <= 2) {
+        // Always set the text first to prevent input issues
         setAmount(text);
+
+        // Clear any existing error when user starts typing
+        if (amountError && text.trim().length > 0) {
+          setAmountError("");
+        }
+
+        // Then validate after a delay
         validateAmount(text);
       }
     }
   };
 
-  const handleDescriptionChange = (text: string) => {
+  const handleDescriptionChange = (text: string): void => {
+    // Set the text first to prevent the first character from disappearing
     setDescription(text);
-    validateDescription(text);
+
+    // Then validate it (this avoids UI issues with validation)
+    if (text.trim() === "") {
+      setDescriptionError("Description is required");
+    } else {
+      // Check for potentially harmful content
+      let isHarmful = false;
+      for (const pattern of HARMFUL_PATTERNS) {
+        if (pattern.test(text)) {
+          setDescriptionError("Description contains invalid characters");
+          isHarmful = true;
+          break;
+        }
+      }
+
+      if (!isHarmful) {
+        setDescriptionError("");
+      }
+    }
   };
 
   const handleCategorySelect = (catId: string) => {
     setSelectedCategoryId(catId);
-    validateCategory();
+    // Clear the category error immediately when a category is selected
+    setCategoryError("");
   };
 
   return (
@@ -280,7 +401,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={[
           styles.modalContainer,
-          { backgroundColor: "rgba(0, 0, 0, 0.5)" },
+          { backgroundColor: colors.modalOverlay },
         ]}
       >
         <View
@@ -296,15 +417,125 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               {t("addTransaction")}
             </Text>
-            <Pressable onPress={handleClose} hitSlop={10}>
-              <Feather name="x" size={24} color={colors.text} />
+            <Pressable
+              onPress={handleClose}
+              hitSlop={10}
+              style={({ pressed }) =>
+                pressed ? PressableStates.pressed : undefined
+              }
+            >
+              <X size={24} color={colors.text} />
             </Pressable>
           </View>
 
           <ScrollView style={styles.form}>
             <Text style={[styles.monthIndicator, { color: colors.subtext }]}>
-              {t("addingToMonth").replace("{month}", formattedMonth)}
+              {t("addTransaction")} {formattedMonth}
             </Text>
+
+            {/* Transaction Type Selector */}
+            <View style={styles.transactionTypeContainer}>
+              <Text style={[styles.label, { color: colors.text }]}>
+                {t(transactionType === "expense" ? "expenses" : "income")}
+              </Text>
+              <View
+                style={[
+                  styles.transactionTypeSelector,
+                  isRTL && styles.rtlFlexRowReverse,
+                ]}
+              >
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.transactionTypeButton,
+                    transactionType === "expense" && [
+                      styles.transactionTypeButtonActive,
+                      {
+                        backgroundColor: colors.danger + "20",
+                        borderColor: colors.danger,
+                      },
+                    ],
+                    { borderColor: colors.border },
+                    pressed && PressableStates.pressed,
+                  ]}
+                  onPress={() => setTransactionType("expense")}
+                >
+                  <View
+                    style={[
+                      styles.transactionTypeButtonContent,
+                      isRTL && styles.rtlFlexRowReverse,
+                    ]}
+                  >
+                    <TrendingDown
+                      size={20}
+                      color={
+                        transactionType === "expense"
+                          ? colors.danger
+                          : colors.subtext
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.transactionTypeText,
+                        {
+                          color:
+                            transactionType === "expense"
+                              ? colors.danger
+                              : colors.text,
+                        },
+                      ]}
+                    >
+                      {t("expenses")}
+                    </Text>
+                  </View>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.transactionTypeButton,
+                    transactionType === "income" && [
+                      styles.transactionTypeButtonActive,
+                      {
+                        backgroundColor: colors.success + "20",
+                        borderColor: colors.success,
+                      },
+                    ],
+                    { borderColor: colors.border },
+                    pressed && PressableStates.pressed,
+                  ]}
+                  onPress={() => setTransactionType("income")}
+                >
+                  <View
+                    style={[
+                      styles.transactionTypeButtonContent,
+                      isRTL && styles.rtlFlexRowReverse,
+                    ]}
+                  >
+                    <TrendingUp
+                      size={20}
+                      color={
+                        transactionType === "income"
+                          ? colors.success
+                          : colors.subtext
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.transactionTypeText,
+                        {
+                          color:
+                            transactionType === "income"
+                              ? colors.success
+                              : colors.text,
+                        },
+                      ]}
+                    >
+                      {t("income")}
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+
             <View style={[styles.amountRow, isRTL && styles.rtlFlexRowReverse]}>
               <View
                 style={[
@@ -333,7 +564,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   ]}
                   value={amount}
                   onChangeText={handleAmountChange}
-                  placeholder={t("amountPlaceholder")}
+                  placeholder="0.00"
                   keyboardType="decimal-pad"
                   placeholderTextColor={colors.subtext}
                   maxLength={10} // Reasonable limit for currency amounts
@@ -363,7 +594,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
               ]}
               value={description}
               onChangeText={handleDescriptionChange}
-              placeholder={t("whatWasThisExpenseFor")}
+              placeholder={t("description")}
               placeholderTextColor={colors.subtext}
               maxLength={100} // Limit description length
               testID="description-input"
@@ -395,18 +626,20 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   style={styles.categoriesContainer}
                   accessibilityLabel="Categories"
                 >
-                  {categories.map((category) => (
+                  {categories.map((category: any) => (
                     <Pressable
                       key={category.id}
-                      style={[
+                      style={({ pressed }) => [
                         styles.categoryChip,
-                        { borderColor: colors.border },
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: colors.card,
+                        },
                         selectedCategoryId === category.id && {
                           backgroundColor: `${category.color}20`,
-                        },
-                        selectedCategoryId === category.id && {
                           borderColor: category.color,
                         },
+                        pressed && PressableStates.pressed,
                       ]}
                       onPress={() => handleCategorySelect(category.id)}
                       testID={`category-${category.id}`}
@@ -447,7 +680,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   <Text
                     style={[styles.receiptPreviewText, { color: colors.text }]}
                   >
-                    {t("receiptCaptured")}
+                    {t("receipt")}
                   </Text>
                   <Pressable
                     style={[
@@ -459,7 +692,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                     accessibilityLabel="Change receipt"
                   >
                     <Text style={styles.receiptChangeButtonText}>
-                      {t("changeReceipt")}
+                      {t("scanReceipt")}
                     </Text>
                   </Pressable>
                 </View>
@@ -471,14 +704,33 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                   ]}
                 >
                   <Pressable
-                    style={[styles.scanButton, { borderColor: colors.border }]}
+                    style={({ pressed }) => [
+                      styles.scanButton,
+                      {
+                        borderColor: colors.primary,
+                        backgroundColor: `${colors.primary}10`,
+                        borderWidth: 1,
+                        borderStyle: "dashed",
+                      },
+                      pressed && {
+                        backgroundColor: `${colors.primary}20`,
+                        transform: [{ scale: 0.98 }],
+                      },
+                    ]}
                     onPress={() => setReceiptScannerVisible(true)}
                     testID="scan-receipt-button"
                     accessibilityLabel="Scan receipt"
                   >
-                    <Feather name="camera" size={20} color={colors.primary} />
+                    <Camera size={22} color={colors.primary} />
                     <Text
-                      style={[styles.scanButtonText, { color: colors.text }]}
+                      style={[
+                        styles.scanButtonText,
+                        {
+                          color: colors.primary,
+                          fontWeight: "500",
+                          marginLeft: 8,
+                        },
+                      ]}
                     >
                       {t("scanReceipt")}
                     </Text>
@@ -489,7 +741,7 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
                       { color: colors.subtext },
                     ]}
                   >
-                    Coming Feature!
+                    {t("aiPoweredScan")}
                   </Text>
                 </View>
               )}
@@ -498,51 +750,63 @@ const AddTransactionModal: React.FC<AddTransactionModalProps> = ({
 
           <View style={styles.submitButtonContainer}>
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.submitButton,
                 { backgroundColor: colors.primary },
-                !amount ||
-                !description ||
-                amountError ||
-                descriptionError ||
-                categoryError ||
-                isSubmitting
-                  ? { opacity: 0.6 }
-                  : undefined,
+                (isSubmitting ||
+                  !amount.trim() ||
+                  !description.trim() ||
+                  (!selectedCategoryId && !categoryId)) && { opacity: 0.6 },
+                pressed &&
+                  !isSubmitting &&
+                  amount.trim() &&
+                  description.trim() &&
+                  (selectedCategoryId || categoryId) &&
+                  PressableStates.pressed,
               ]}
               onPress={handleSubmit}
               disabled={
-                !amount ||
-                !description ||
-                !!amountError ||
-                !!descriptionError ||
-                !!categoryError ||
-                isSubmitting
+                isSubmitting ||
+                !amount.trim() ||
+                !description.trim() ||
+                (!selectedCategoryId && !categoryId)
               }
+              testID="add-transaction-button"
               accessibilityLabel="Add transaction"
               accessibilityHint="Submit the transaction details"
             >
               {isSubmitting ? (
-                <Text style={styles.submitButtonText}>{t("sending")}</Text>
+                <ActivityIndicator size="small" color="white" />
               ) : (
                 <Text style={styles.submitButtonText}>
                   {t("addTransaction")}
                 </Text>
               )}
             </Pressable>
-            {submitError ? (
-              <Text style={[styles.errorText, { color: colors.danger }]}>
-                {submitError}
-              </Text>
-            ) : null}
           </View>
         </View>
       </KeyboardAvoidingView>
 
-      <ReceiptScanner
-        visible={receiptScannerVisible}
-        onClose={() => setReceiptScannerVisible(false)}
-        onCapture={handleReceiptCaptured}
+      {/* Render ReceiptScanner when requested */}
+      {receiptScannerVisible && (
+        <Modal
+          visible={receiptScannerVisible}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setReceiptScannerVisible(false)}
+        >
+          <View style={{ flex: 1 }}>
+            <ReceiptScanner onClose={() => setReceiptScannerVisible(false)} />
+          </View>
+        </Modal>
+      )}
+
+      {/* Upgrade Prompt Modal for transaction limits */}
+      <UpgradePromptModal
+        visible={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        trigger="transaction_limit"
+        urgencyLevel="high"
       />
     </Modal>
   );
@@ -554,59 +818,59 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === "ios" ? 40 : 20,
+    borderTopLeftRadius: BorderRadius.xLarge,
+    borderTopRightRadius: BorderRadius.xLarge,
+    paddingHorizontal: Spacing.l,
+    paddingBottom: Platform.OS === "ios" ? Spacing.xxl : Spacing.l,
     maxHeight: "80%",
+    ...(Shadows.large as object),
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 16,
+    paddingVertical: Spacing.m,
     borderBottomWidth: 1,
   },
   rtlFlexRowReverse: {
     flexDirection: "row-reverse",
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    ...(Typography.title as object),
   },
   monthIndicator: {
-    fontSize: 14,
+    ...(Typography.caption as object),
     fontStyle: "italic",
-    marginBottom: 16,
+    marginBottom: Spacing.m,
     textAlign: "center",
   },
   form: {
-    marginTop: 16,
+    marginTop: Spacing.m,
     flexGrow: 1,
   },
   amountRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: Spacing.s,
   },
   label: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-    marginTop: 16,
+    ...(Typography.subtitle as object),
+    marginBottom: Spacing.s,
+    marginTop: Spacing.m,
   },
   amountInputContainer: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: BorderRadius.small,
+    paddingHorizontal: Spacing.m,
     height: 50,
+    ...(Shadows.small as object),
   },
   currencySymbol: {
     fontSize: 18,
-    marginRight: 4,
-    marginLeft: 4,
+    marginRight: Spacing.xs,
+    marginLeft: Spacing.xs,
   },
   amountInput: {
     flex: 1,
@@ -614,63 +878,68 @@ const styles = StyleSheet.create({
     height: 50,
   },
   errorText: {
-    fontSize: 12,
-    marginTop: 4,
-    marginLeft: 4,
-    marginBottom: 8,
+    ...(Typography.small as object),
+    marginTop: Spacing.xs,
+    marginLeft: Spacing.xs,
+    marginBottom: Spacing.s,
   },
   charCount: {
-    fontSize: 12,
+    ...(Typography.small as object),
     alignSelf: "flex-end",
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   input: {
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderColor: "#ccc", // fallback, can be replaced with colors.border if available
+    backgroundColor: "#fff", // fallback, can be replaced with colors.inputBackground if available
+    borderRadius: BorderRadius.medium,
+    paddingVertical: Spacing.m,
     fontSize: 16,
   },
   categoriesContainer: {
     flexDirection: "row",
-    marginTop: 8,
-    marginBottom: 24,
+    marginTop: Spacing.s,
+    marginBottom: Spacing.xl,
   },
   categoryChip: {
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
+    borderRadius: BorderRadius.medium,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.s,
+    marginRight: Spacing.s,
+    ...(Shadows.small as object),
   },
   categoryChipText: {
-    fontSize: 14,
+    ...(Typography.caption as object),
   },
   receiptSection: {
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: Spacing.s,
+    marginBottom: Spacing.m,
   },
   scanButtonContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 8,
+    marginTop: Spacing.s,
   },
   scanButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.large,
     borderStyle: "dashed",
-    paddingVertical: 16,
-    marginRight: 12,
+    paddingVertical: Spacing.m,
+    paddingHorizontal: Spacing.l,
+    marginRight: Spacing.m,
+    ...(Shadows.medium as object),
   },
   scanButtonText: {
-    fontSize: 16,
-    marginLeft: 8,
+    ...(Typography.body as object),
+    marginLeft: Spacing.s,
+    fontWeight: "500",
   },
   comingFeatureText: {
-    fontSize: 12,
+    ...(Typography.small as object),
     fontStyle: "italic",
   },
   receiptPreview: {
@@ -678,36 +947,68 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginTop: 8,
+    borderRadius: BorderRadius.medium,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.m,
+    marginTop: Spacing.s,
+    ...(Shadows.small as object),
   },
   receiptPreviewText: {
-    fontSize: 14,
+    ...(Typography.caption as object),
   },
   receiptChangeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: Spacing.m,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.small,
+    ...(Shadows.small as object),
   },
   receiptChangeButtonText: {
     color: "white",
-    fontSize: 12,
+    ...(Typography.small as object),
     fontWeight: "500",
   },
   submitButtonContainer: {
-    paddingTop: 16,
+    paddingTop: Spacing.m,
   },
   submitButton: {
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: BorderRadius.medium,
+    paddingVertical: Spacing.m,
     alignItems: "center",
+    ...(Shadows.medium as object),
   },
   submitButtonText: {
     color: "white",
-    fontSize: 16,
-    fontWeight: "600",
+    ...(Typography.subtitle as object),
+  },
+  transactionTypeContainer: {
+    marginTop: Spacing.m,
+    marginBottom: Spacing.m,
+  },
+  transactionTypeSelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: Spacing.s,
+  },
+  transactionTypeButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: BorderRadius.medium,
+    paddingVertical: Spacing.m,
+    paddingHorizontal: Spacing.m,
+    marginHorizontal: Spacing.xs,
+    ...(Shadows.small as object),
+  },
+  transactionTypeButtonActive: {
+    borderWidth: 2,
+  },
+  transactionTypeButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  transactionTypeText: {
+    ...(Typography.subtitle as object),
+    marginLeft: Spacing.s,
   },
 });
 

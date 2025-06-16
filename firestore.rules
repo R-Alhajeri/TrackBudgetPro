@@ -1,0 +1,224 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions for security rules
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    function isActiveUser() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isActive == true;
+    }
+    
+    function hasValidSubscription() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subscription.status == 'active';
+    }
+    
+    function isValidTransactionData() {
+      return request.resource.data.keys().hasAll(['userId', 'amount', 'date', 'categoryId', 'type']) &&
+        request.resource.data.amount is number &&
+        request.resource.data.amount > 0 &&
+        request.resource.data.type in ['expense', 'income'] &&
+        request.resource.data.userId == request.auth.uid;
+    }
+    
+    function isValidCategoryData() {
+      return request.resource.data.keys().hasAll(['name', 'icon', 'color', 'type']) &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.type in ['expense', 'income'];
+    }
+    
+    // Users collection - users can only access their own data
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUserData();
+      allow update: if isOwner(userId) && isValidUserUpdate() || isAdmin();
+      allow delete: if isAdmin(); // Only admins can delete users
+      
+      function isValidUserData() {
+        return request.resource.data.keys().hasAll(['email', 'displayName', 'role', 'isActive']) &&
+          request.resource.data.email == request.auth.token.email &&
+          request.resource.data.role == 'user'; // New users are always 'user' role
+      }
+      
+      function isValidUserUpdate() {
+        // Users can only update specific fields
+        let allowedFields = ['displayName', 'preferences', 'lastLoginAt'];
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedFields);
+      }
+    }
+    
+    // Transactions - users can only access their own transactions
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      
+      allow create: if isActiveUser() && 
+        isValidTransactionData() &&
+        hasTransactionLimits();
+        
+      allow update: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid &&
+        isValidTransactionData() &&
+        request.resource.data.userId == resource.data.userId; // Can't change ownership
+        
+      allow delete: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin());
+      
+      function hasTransactionLimits() {
+        // Free users have transaction limits
+        return hasValidSubscription() || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)/analytics/transactionCount).data.count < 15;
+      }
+    }
+    
+    // Alternative: User-specific subcollections (recommended for better performance)
+    match /users/{userId}/transactions/{transactionId} {
+      allow read, write: if isOwner(userId) && isActiveUser();
+      allow read: if isAdmin(); // Admins can read all transactions
+      
+      allow create: if isOwner(userId) && 
+        isValidTransactionData() &&
+        hasUserTransactionLimits(userId);
+        
+      function hasUserTransactionLimits(userId) {
+        return hasValidSubscription() ||
+          get(/databases/$(database)/documents/users/$(userId)/stats/current).data.transactionCount < 15;
+      }
+    }
+    
+    // Categories - read access for all authenticated users, write for own custom categories
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      
+      // Allow write only for custom categories (non-default)
+      allow create: if isActiveUser() && 
+        isValidCategoryData() &&
+        request.resource.data.isDefault == false &&
+        hasUserCategoryLimits();
+        
+      allow update: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || 
+         (resource.data.isDefault == true && isAdmin()));
+         
+      allow delete: if isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || isAdmin()) &&
+        resource.data.isDefault == false; // Can't delete default categories
+      
+      function hasUserCategoryLimits() {
+        // Free users have category limits
+        return hasValidSubscription() ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)/stats/current).data.categoryCount < 5;
+      }
+    }
+    
+    // User-specific categories (recommended approach)
+    match /users/{userId}/categories/{categoryId} {
+      allow read, write: if isOwner(userId) && isActiveUser();
+      allow read: if isAdmin();
+      
+      allow create: if isOwner(userId) && 
+        isValidCategoryData() &&
+        hasUserCategoryLimits(userId);
+        
+      function hasUserCategoryLimits(userId) {
+        return hasValidSubscription() ||
+          get(/databases/$(database)/documents/users/$(userId)/stats/current).data.customCategoryCount < 3;
+      }
+    }
+    
+    // Budgets - users can only access their own budgets
+    match /budgets/{budgetId} {
+      allow read, write: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      allow read: if isAdmin();
+      
+      allow create: if isActiveUser() && 
+        request.resource.data.userId == request.auth.uid &&
+        isValidBudgetData();
+        
+      function isValidBudgetData() {
+        return request.resource.data.keys().hasAll(['name', 'totalBudget', 'currency', 'period']) &&
+          request.resource.data.totalBudget > 0 &&
+          request.resource.data.period in ['monthly', 'weekly', 'yearly'];
+      }
+    }
+    
+    // User-specific budgets (recommended approach)
+    match /users/{userId}/budgets/{budgetId} {
+      allow read, write: if isOwner(userId) && isActiveUser();
+      allow read: if isAdmin();
+    }
+    
+    // Analytics and aggregated data - read-only for users
+    match /users/{userId}/analytics/{document} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false; // Only server-side functions can write analytics
+    }
+    
+    // User stats for limits enforcement
+    match /users/{userId}/stats/{document} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if false; // Only server-side functions can write stats
+    }
+    
+    // Receipts metadata (actual files stored in Cloud Storage)
+    match /users/{userId}/receipts/{receiptId} {
+      allow read, write: if isOwner(userId) && isActiveUser();
+      allow read: if isAdmin();
+      
+      allow create: if isOwner(userId) && 
+        hasValidSubscription(); // Receipt storage is premium feature
+    }
+    
+    // Admin-only collections
+    match /admin/{document=**} {
+      allow read, write: if isAdmin();
+    }
+    
+    // System collections (app-wide settings, default categories, etc.)
+    match /system/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    
+    // Subscription and billing data
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      allow write: if false; // Only server-side functions handle subscriptions
+    }
+    
+    // Audit logs - admin read-only
+    match /audit/{logId} {
+      allow read: if isAdmin();
+      allow write: if false; // Only server-side functions write audit logs
+    }
+    
+    // Feedback and support tickets
+    match /feedback/{feedbackId} {
+      allow read, create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin();
+      allow update: if isAdmin(); // Admins can update status
+    }
+    
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

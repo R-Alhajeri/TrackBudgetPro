@@ -12,18 +12,17 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
-import { AntDesign } from "@expo/vector-icons";
-import useAuthStore from "@/store/auth-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import { Mail, Lock, User, Eye, EyeOff, ArrowLeft } from "lucide-react-native";
+import useAuthStore from "../store/auth-store";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
 import { useRouter } from "expo-router";
-import { signupWithBackend } from "@/lib/auth-api";
 
 export default function SignupScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { t, isRTL } = useLanguageStore();
-  const { isAuthenticated } = useAuthStore();
+  const { signup, isAuthenticated } = useAuthStore();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -39,7 +38,7 @@ export default function SignupScreen() {
   // If already authenticated, redirect to home
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace("/(tabs)");
+      router.replace("./(tabs)");
     }
   }, [isAuthenticated, router]);
 
@@ -54,50 +53,50 @@ export default function SignupScreen() {
 
     // Validate name
     if (!name.trim()) {
-      setNameError(t("nameRequired"));
+      setNameError("Name is required");
       isValid = false;
     }
 
     // Validate email
     if (!email.trim()) {
-      setEmailError(t("emailRequired"));
+      setEmailError("Email is required");
       isValid = false;
     } else {
       // Basic email validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email.trim())) {
-        setEmailError(t("emailInvalid"));
+        setEmailError("Please enter a valid email address");
         isValid = false;
       }
     }
 
     // Validate password
     if (!password) {
-      setPasswordError(t("passwordRequired"));
+      setPasswordError("Password is required");
       isValid = false;
     } else if (password.length < 8) {
-      setPasswordError(t("passwordMinLength"));
+      setPasswordError("Password must be at least 8 characters long");
       isValid = false;
     } else if (!/\d/.test(password)) {
-      setPasswordError(t("passwordNumber"));
+      setPasswordError("Password must contain at least one number");
       isValid = false;
     } else if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-      setPasswordError(t("passwordSpecial"));
+      setPasswordError("Password must contain at least one special character");
       isValid = false;
     } else if (!/[A-Z]/.test(password)) {
-      setPasswordError(t("passwordUppercase"));
+      setPasswordError("Password must contain at least one uppercase letter");
       isValid = false;
     } else if (!/[a-z]/.test(password)) {
-      setPasswordError(t("passwordLowercase"));
+      setPasswordError("Password must contain at least one lowercase letter");
       isValid = false;
     }
 
     // Validate confirm password
     if (!confirmPassword) {
-      setConfirmPasswordError(t("confirmPasswordRequired"));
+      setConfirmPasswordError("Please confirm your password");
       isValid = false;
     } else if (password !== confirmPassword) {
-      setConfirmPasswordError(t("passwordsDoNotMatch"));
+      setConfirmPasswordError("Passwords do not match");
       isValid = false;
     }
 
@@ -112,15 +111,23 @@ export default function SignupScreen() {
     setIsLoading(true);
 
     try {
-      const success = await signupWithBackend(name, email, password);
+      const success = await signup(name, email, password);
 
       if (success) {
-        router.replace("/(tabs)");
+        router.replace("./(tabs)");
       } else {
-        Alert.alert(t("signupFailed"), t("signupError"), [{ text: "OK" }]);
+        Alert.alert(
+          "Signup Failed",
+          "This email may already be in use or there was an error creating your account.",
+          [{ text: "OK" }]
+        );
       }
     } catch (error) {
-      Alert.alert(t("signupError"), t("errorOccurred"), [{ text: "OK" }]);
+      Alert.alert(
+        "Signup Error",
+        "An unexpected error occurred. Please try again later.",
+        [{ text: "OK" }]
+      );
     } finally {
       setIsLoading(false);
     }
@@ -135,7 +142,7 @@ export default function SignupScreen() {
   };
 
   const handleBackToHome = () => {
-    router.replace("/(tabs)");
+    router.replace("./(tabs)");
   };
 
   return (
@@ -154,7 +161,7 @@ export default function SignupScreen() {
             onPress={handleBackToHome}
             testID="back-button"
           >
-            <AntDesign name="arrowleft" size={24} color={colors.text} />
+            <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
 
           <View
@@ -163,14 +170,14 @@ export default function SignupScreen() {
               { backgroundColor: `${colors.primary}20` },
             ]}
           >
-            <AntDesign name="user" size={48} color={colors.primary} />
+            <User size={48} color={colors.primary} />
           </View>
 
           <Text style={[styles.title, { color: colors.text }]}>
-            {t("signupTitle")}
+            Create Account
           </Text>
           <Text style={[styles.subtitle, { color: colors.subtext }]}>
-            {t("signupSubtitle")}
+            Sign up to start tracking your budget
           </Text>
 
           <View
@@ -179,8 +186,7 @@ export default function SignupScreen() {
               { borderColor: nameError ? colors.danger : colors.border },
             ]}
           >
-            <AntDesign
-              name="user"
+            <User
               size={20}
               color={nameError ? colors.danger : colors.subtext}
               style={styles.inputIcon}
@@ -193,7 +199,7 @@ export default function SignupScreen() {
                   textAlign: isRTL ? "right" : "left",
                 },
               ]}
-              placeholder={t("nameRequired")}
+              placeholder="Full Name"
               placeholderTextColor={colors.subtext}
               value={name}
               onChangeText={(text) => {
@@ -216,8 +222,7 @@ export default function SignupScreen() {
               { borderColor: emailError ? colors.danger : colors.border },
             ]}
           >
-            <AntDesign
-              name="mail"
+            <Mail
               size={20}
               color={emailError ? colors.danger : colors.subtext}
               style={styles.inputIcon}
@@ -230,7 +235,7 @@ export default function SignupScreen() {
                   textAlign: isRTL ? "right" : "left",
                 },
               ]}
-              placeholder={t("emailRequired")}
+              placeholder="Email"
               placeholderTextColor={colors.subtext}
               value={email}
               onChangeText={(text) => {
@@ -254,8 +259,7 @@ export default function SignupScreen() {
               { borderColor: passwordError ? colors.danger : colors.border },
             ]}
           >
-            <AntDesign
-              name="lock"
+            <Lock
               size={20}
               color={passwordError ? colors.danger : colors.subtext}
               style={styles.inputIcon}
@@ -268,7 +272,7 @@ export default function SignupScreen() {
                   textAlign: isRTL ? "right" : "left",
                 },
               ]}
-              placeholder={t("passwordRequired")}
+              placeholder="Password"
               placeholderTextColor={colors.subtext}
               secureTextEntry={!showPassword}
               value={password}
@@ -284,9 +288,9 @@ export default function SignupScreen() {
               style={styles.eyeIcon}
             >
               {showPassword ? (
-                <AntDesign name="eyeo" size={20} color={colors.subtext} />
+                <EyeOff size={20} color={colors.subtext} />
               ) : (
-                <AntDesign name="eye" size={20} color={colors.subtext} />
+                <Eye size={20} color={colors.subtext} />
               )}
             </Pressable>
           </View>
@@ -306,8 +310,7 @@ export default function SignupScreen() {
               },
             ]}
           >
-            <AntDesign
-              name="lock"
+            <Lock
               size={20}
               color={confirmPasswordError ? colors.danger : colors.subtext}
               style={styles.inputIcon}
@@ -320,7 +323,7 @@ export default function SignupScreen() {
                   textAlign: isRTL ? "right" : "left",
                 },
               ]}
-              placeholder={t("confirmPasswordRequired")}
+              placeholder="Confirm Password"
               placeholderTextColor={colors.subtext}
               secureTextEntry={!showConfirmPassword}
               value={confirmPassword}
@@ -336,9 +339,9 @@ export default function SignupScreen() {
               style={styles.eyeIcon}
             >
               {showConfirmPassword ? (
-                <AntDesign name="eyeo" size={20} color={colors.subtext} />
+                <EyeOff size={20} color={colors.subtext} />
               ) : (
-                <AntDesign name="eye" size={20} color={colors.subtext} />
+                <Eye size={20} color={colors.subtext} />
               )}
             </Pressable>
           </View>
@@ -361,80 +364,28 @@ export default function SignupScreen() {
             {isLoading ? (
               <ActivityIndicator size="small" color="white" />
             ) : (
-              <Text style={styles.signupButtonText}>{t("signupButton")}</Text>
+              <Text style={styles.signupButtonText}>Create Account</Text>
             )}
-          </Pressable>
-
-          {/* Guest/demo mode button */}
-          <Pressable
-            style={[
-              styles.signupButton,
-              { backgroundColor: colors.subtext },
-              { marginTop: 8 },
-            ]}
-            onPress={async () => {
-              setIsLoading(true);
-              try {
-                const { guestLoginWithBackend } = await import(
-                  "@/lib/auth-api"
-                );
-
-                if (typeof guestLoginWithBackend === "function") {
-                  const success = await guestLoginWithBackend();
-                  if (success) {
-                    router.replace("/(tabs)");
-                  } else {
-                    Alert.alert(
-                      "Guest Login Failed",
-                      "Unable to start demo mode. Please try again."
-                    );
-                  }
-                } else {
-                  console.error(
-                    "[SignupScreen] guestLoginWithBackend is not a function."
-                  ); // New Log
-                  Alert.alert(
-                    "Error",
-                    "Guest login feature is currently unavailable."
-                  );
-                }
-              } catch (e) {
-                console.error(
-                  "[SignupScreen] Error during guest login process:",
-                  e
-                ); // New Log
-                Alert.alert(
-                  "Error",
-                  "An unexpected error occurred during guest login."
-                );
-              } finally {
-                setIsLoading(false);
-              }
-            }}
-            disabled={isLoading}
-            testID="guest-login-button"
-          >
-            <Text style={[styles.signupButtonText, { color: colors.text }]}>
-              Continue as Guest
-            </Text>
           </Pressable>
 
           <View style={styles.loginContainer}>
             <Text style={[styles.loginText, { color: colors.subtext }]}>
-              {t("alreadyHaveAccount")}
+              Already have an account?
             </Text>
             <TouchableOpacity
-              onPress={() => router.push("/login")}
+              onPress={() => router.push("./login")}
               testID="login-link"
             >
               <Text style={[styles.loginLink, { color: colors.primary }]}>
-                {t("loginButton")}
+                Log in
               </Text>
             </TouchableOpacity>
           </View>
 
           <Text style={[styles.note, { color: colors.subtext }]}>
-            {t("signupNote")}
+            {
+              "By signing up, you agree to our Terms of Service and Privacy Policy"
+            }
           </Text>
         </View>
       </ScrollView>

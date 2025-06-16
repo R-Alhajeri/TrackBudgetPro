@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import React from "react";
+import { View, Text, StyleSheet, Platform } from "react-native";
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -11,26 +11,26 @@ interface State {
   error: Error | null;
 }
 
-const IFRAME_ID = 'rork-web-preview';
+const IFRAME_ID = "alhajeritech-web-preview";
 
 const webTargetOrigins = [
   "http://localhost:3000",
-  "https://rorkai.com",
-  "https://rork.app",
-];    
+  "https://alhajeritech.com",
+  "https://alhajeritech.app",
+];
 
 function sendErrorToIframeParent(error: any, errorInfo?: any) {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    console.debug('Sending error to parent:', {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    console.debug("Sending error to parent:", {
       error,
       errorInfo,
-      referrer: document.referrer
+      referrer: document.referrer,
     });
 
     // Safely extract error message
     let errorMessage = "Unknown error";
     let errorStack = undefined;
-    
+
     if (error) {
       if (typeof error === "string") {
         errorMessage = error;
@@ -39,7 +39,9 @@ function sendErrorToIframeParent(error: any, errorInfo?: any) {
         errorStack = error.stack;
       } else if (typeof error === "object" && error !== null) {
         const errorObj = error as { message?: string; stack?: string };
-        errorMessage = errorObj.message ? String(errorObj.message) : "An object error occurred";
+        errorMessage = errorObj.message
+          ? String(errorObj.message)
+          : "An object error occurred";
         errorStack = errorObj.stack ? String(errorObj.stack) : undefined;
       } else {
         errorMessage = String(error);
@@ -48,12 +50,17 @@ function sendErrorToIframeParent(error: any, errorInfo?: any) {
 
     // Safely extract component stack
     let componentStack = undefined;
-    if (errorInfo && typeof errorInfo === "object" && errorInfo !== null && "componentStack" in errorInfo) {
+    if (
+      errorInfo &&
+      typeof errorInfo === "object" &&
+      errorInfo !== null &&
+      "componentStack" in errorInfo
+    ) {
       componentStack = String(errorInfo.componentStack);
     }
 
     const errorPayload = {
-      type: 'ERROR',
+      type: "ERROR",
       error: {
         message: errorMessage,
         stack: errorStack,
@@ -66,36 +73,44 @@ function sendErrorToIframeParent(error: any, errorInfo?: any) {
     try {
       window.parent.postMessage(
         errorPayload,
-        webTargetOrigins.includes(document.referrer) ? document.referrer : '*'
+        webTargetOrigins.includes(document.referrer) ? document.referrer : "*"
       );
     } catch (postMessageError) {
-      console.error('Failed to send error to parent:', postMessageError);
+      console.error("Failed to send error to parent:", postMessageError);
     }
   }
 }
 
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  window.addEventListener('error', (event) => {
-    event.preventDefault();
-    const errorDetails = event.error || {
-      message: event.message || 'Unknown error',
-      filename: event.filename || 'Unknown file',
-      lineno: event.lineno || 'Unknown line',
-      colno: event.colno || 'Unknown column'
-    };
-    sendErrorToIframeParent(errorDetails);
-  }, true);
+if (Platform.OS === "web" && typeof window !== "undefined") {
+  window.addEventListener(
+    "error",
+    (event) => {
+      event.preventDefault();
+      const errorDetails = event.error || {
+        message: event.message || "Unknown error",
+        filename: event.filename || "Unknown file",
+        lineno: event.lineno || "Unknown line",
+        colno: event.colno || "Unknown column",
+      };
+      sendErrorToIframeParent(errorDetails);
+    },
+    true
+  );
 
-  window.addEventListener('unhandledrejection', (event) => {
-    event.preventDefault();
-    const error = event.reason || new Error('Unhandled Promise Rejection');
-    sendErrorToIframeParent(error);
-  }, true);
+  window.addEventListener(
+    "unhandledrejection",
+    (event) => {
+      event.preventDefault();
+      const error = event.reason || new Error("Unhandled Promise Rejection");
+      sendErrorToIframeParent(error);
+    },
+    true
+  );
 
   const originalConsoleError = console.error;
   console.error = (...args) => {
     if (args.length > 0) {
-      sendErrorToIframeParent(args.join(' '));
+      sendErrorToIframeParent(args.join(" "));
     }
     originalConsoleError.apply(console, args);
   };
@@ -113,8 +128,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Safely handle the error
-    const safeError = error || new Error('Unknown error occurred');
-    
+    const safeError = error || new Error("Unknown error occurred");
+
     sendErrorToIframeParent(safeError, errorInfo);
     if (this.props.onError) {
       this.props.onError(safeError, errorInfo);
@@ -125,27 +140,32 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
     if (this.state.hasError) {
       // Safe error message extraction
       let errorMessage = "An unknown error occurred";
-      
+
       if (this.state.error) {
         if (typeof this.state.error === "string") {
           errorMessage = this.state.error;
         } else if (this.state.error instanceof Error) {
           errorMessage = this.state.error.message || "An error occurred";
-        } else if (typeof this.state.error === "object" && this.state.error !== null) {
+        } else if (
+          typeof this.state.error === "object" &&
+          this.state.error !== null
+        ) {
           // Type guard to ensure we can access message property
           const errorObj = this.state.error as { message?: string };
-          errorMessage = errorObj.message ? String(errorObj.message) : "An object error occurred";
+          errorMessage = errorObj.message
+            ? String(errorObj.message)
+            : "An object error occurred";
         } else {
           errorMessage = String(this.state.error);
         }
       }
-        
+
       return (
         <View style={styles.container}>
           <View style={styles.content}>
             <Text style={styles.title}>Something went wrong</Text>
             <Text style={styles.subtitle}>{errorMessage}</Text>
-            {Platform.OS !== 'web' && (
+            {Platform.OS !== "web" && (
               <Text style={styles.description}>
                 Please check your device logs for more details.
               </Text>
@@ -162,32 +182,32 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, State> {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   content: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: 20,
   },
   title: {
     fontSize: 36,
-    textAlign: 'center',
-    fontWeight: 'bold',
+    textAlign: "center",
+    fontWeight: "bold",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
+    color: "#666",
     marginBottom: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   description: {
     fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
     marginTop: 8,
   },
-}); 
+});
 
 export default ErrorBoundary;

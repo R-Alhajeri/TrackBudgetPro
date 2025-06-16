@@ -1,8 +1,15 @@
 import React from "react";
 import { View, Text, StyleSheet, Modal, Pressable, Alert } from "react-native";
-import { AntDesign } from "@expo/vector-icons";
-import useLanguageStore from "@/store/language-store";
-import useAppTheme from "@/hooks/useAppTheme";
+import { X, Check } from "lucide-react-native";
+import useLanguageStore from "../store/language-store";
+import useAppTheme from "../hooks/useAppTheme";
+import {
+  BorderRadius,
+  Typography,
+  Shadows,
+  Spacing,
+  PressableStates,
+} from "../constants/styleGuide";
 
 interface LanguageSelectorProps {
   visible: boolean;
@@ -26,7 +33,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       setLanguage(code);
       Alert.alert(
         t("language"),
-        t("thankYou"), // Using thankYou as a placeholder for a message like "Language changed, please restart the app for full effect"
+        t("success"), // Using 'success' as a placeholder for a message like "Language changed, please restart the app for full effect"
         [{ text: "OK", onPress: onClose }]
       );
     } catch (error) {
@@ -45,7 +52,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       <View
         style={[
           styles.modalContainer,
-          { backgroundColor: "rgba(0, 0, 0, 0.5)" },
+          { backgroundColor: colors.modalOverlay },
         ]}
       >
         <View
@@ -64,9 +71,12 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
             <Pressable
               onPress={onClose}
               hitSlop={10}
+              style={({ pressed }) =>
+                pressed ? PressableStates.pressed : undefined
+              }
               accessibilityLabel="Close"
             >
-              <AntDesign name="close" size={24} color={colors.text} />
+              <X size={24} color={colors.text} />
             </Pressable>
           </View>
 
@@ -74,13 +84,14 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
             {languages.map((lang) => (
               <Pressable
                 key={lang.code}
-                style={[
+                style={({ pressed }) => [
                   styles.languageItem,
                   { borderBottomColor: colors.border },
                   language === lang.code && {
                     backgroundColor: `${colors.primary}10`,
                   },
                   isRTL && styles.rtlFlexRowReverse,
+                  pressed && PressableStates.pressed,
                 ]}
                 onPress={() => handleSelectLanguage(lang.code as "en" | "ar")}
                 accessibilityLabel={`Select ${lang.name}`}
@@ -101,7 +112,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({
                   </Text>
                 </View>
                 {language === lang.code && (
-                  <AntDesign name="check" size={20} color={colors.primary} />
+                  <Check size={20} color={colors.primary} />
                 )}
               </Pressable>
             ))}
@@ -118,47 +129,46 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 20,
+    borderTopLeftRadius: BorderRadius.xLarge,
+    borderTopRightRadius: BorderRadius.xLarge,
+    paddingBottom: Spacing.l,
     maxHeight: "30%",
+    ...(Shadows.large as object),
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: Spacing.m,
+    paddingHorizontal: Spacing.l,
     borderBottomWidth: 1,
   },
   rtlFlexRowReverse: {
     flexDirection: "row-reverse",
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    ...(Typography.title as object),
   },
   languageList: {
-    paddingTop: 8,
+    paddingTop: Spacing.s,
   },
   languageItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: Spacing.m,
+    paddingHorizontal: Spacing.l,
     borderBottomWidth: 1,
   },
   languageInfo: {
     flex: 1,
   },
   languageName: {
-    fontSize: 16,
-    fontWeight: "600",
+    ...(Typography.subtitle as object),
     marginBottom: 2,
   },
   languageNativeName: {
-    fontSize: 14,
+    ...(Typography.caption as object),
   },
 });
 

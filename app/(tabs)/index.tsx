@@ -5,63 +5,90 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  ActivityIndicator,
+  Animated,
 } from "react-native";
-import { AntDesign } from "@expo/vector-icons";
-import BudgetSummary from "@/components/BudgetSummary";
-import CategoryCard from "@/components/CategoryCard";
-import AddTransactionModal from "@/components/AddTransactionModal";
-import SetIncomeModal from "@/components/SetIncomeModal";
-import EmptyState from "@/components/EmptyState";
-import MonthSelector from "@/components/MonthSelector";
-import useBudgetStore from "@/store/budget-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import { Plus, DollarSign } from "lucide-react-native";
+import BudgetSummary from "../../components/BudgetSummary";
+import CategoryCard from "../../components/CategoryCard";
+import AddTransactionModal from "../../components/AddTransactionModal";
+import SetIncomeModal from "../../components/SetIncomeModal";
+import EmptyState from "../../components/EmptyState";
+import MonthSelector from "../../components/MonthSelector";
+import { BannerManager } from "../../components/BannerManager";
+import useBudgetStore from "../../store/budget-store";
+import useAppTheme from "../../hooks/useAppTheme";
+import useLanguageStore from "../../store/language-store";
 import { useRouter } from "expo-router";
-import useAuthStore from "@/store/auth-store"; // Added import
+import { SubscriptionPaywall } from "../../components/SubscriptionPaywall";
+import useSubscriptionStore from "../../store/subscription-store";
+import { useMonthContext } from "../../store/month-context";
+import AddCategoryModal from "../../components/AddCategoryModal";
+import {
+  Shadows,
+  Spacing,
+  Typography,
+  BorderRadius,
+  PressableStates,
+} from "../../constants/styleGuide";
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const {
-    income,
-    categories,
-    transactions,
-    selectedMonth,
-    fetchCategoriesFromBackend,
-    fetchTransactionsFromBackend,
-    fetchBudgetFromBackend, // <-- add this
-  } = useBudgetStore();
+  const { income, categories, transactions, setSelectedMonth } =
+    useBudgetStore();
+  const { activeMonth } = useMonthContext();
   const { colors } = useAppTheme();
   const { t, isRTL } = useLanguageStore();
-  const { isAuthenticated, hasHydrated } = useAuthStore(); // Get auth state
-
-  if (!hasHydrated || !isAuthenticated) {
-    return null;
-  }
-
+  const { isSubscribed, isDemoMode, isGuestMode } = useSubscriptionStore();
   const [transactionModalVisible, setTransactionModalVisible] = useState(false);
   const [incomeModalVisible, setIncomeModalVisible] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<
     string | undefined
   >(undefined);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [addCategoryModalVisible, setAddCategoryModalVisible] = useState(false);
+
+  const [seeAllScale] = useState(new Animated.Value(1));
+  const [plusScale] = useState(new Animated.Value(1));
+
+  const animateScale = (animatedValue: Animated.Value, toValue: number) => {
+    Animated.spring(animatedValue, {
+      toValue,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 8,
+    }).start();
+  };
 
   const handleAddTransaction = (categoryId?: string) => {
+    if (!isSubscribed && !isDemoMode) {
+      router.push("/subscription" as any);
+      return;
+    }
     setSelectedCategoryId(categoryId);
     setTransactionModalVisible(true);
   };
 
   const handleCategoryPress = (categoryId: string) => {
-    router.push(`/category/${categoryId}`);
+    if (!isSubscribed && !isDemoMode) {
+      router.push("/subscription" as any);
+      return;
+    }
+    router.push(`/category/${categoryId}` as any);
   };
+
+  // On first load, default to current month if selectedMonth is not set or is invalid
+  useEffect(() => {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    if (!activeMonth || activeMonth.length !== 7) {
+      setSelectedMonth(currentMonth);
+    }
+  }, []);
 
   // Filter transactions for the selected month
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) =>
-      transaction.date.startsWith(selectedMonth)
+      transaction.date.startsWith(activeMonth)
     );
-  }, [transactions, selectedMonth]);
+  }, [transactions, activeMonth]);
 
   // Calculate spent for the selected month for each category
   const categoriesWithMonthlySpent = useMemo(() => {
@@ -73,247 +100,319 @@ export default function DashboardScreen() {
     });
   }, [categories, filteredTransactions]);
 
-  // Show top 3 categories by budget
+  // Show top 3 categories by budget (or 2 in demo mode)
   const topCategories = [...categoriesWithMonthlySpent]
     .sort((a, b) => b.budget - a.budget)
-    .slice(0, 3);
+    .slice(0, isDemoMode ? 2 : 3);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        const [year, month] = selectedMonth.split("-").map(Number);
-        if (fetchBudgetFromBackend) await fetchBudgetFromBackend(year, month); // <-- fetch budget for month
-        // Ensure these functions exist before calling
-        if (fetchCategoriesFromBackend) await fetchCategoriesFromBackend();
-        if (fetchTransactionsFromBackend)
-          await fetchTransactionsFromBackend(year, month);
-      } catch (e: any) {
-        // Added type annotation for e
-        console.error("Error fetching dashboard data:", e);
-        if (
-          e &&
-          e.message &&
-          typeof e.message === "string" &&
-          e.message.includes("UNAUTHORIZED")
-        ) {
-          setError(t("sessionExpiredPleaseLogin"));
-        } else {
-          setError(t("errorOccurred"));
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
+  if (!isSubscribed && !isDemoMode) {
+    return <SubscriptionPaywall />;
+  }
 
-    if (hasHydrated) {
-      if (isAuthenticated) {
-        fetchData();
-      }
-    }
-    // Add isAuthenticated, hasHydrated to dependency array
-  }, [
-    selectedMonth,
-    fetchCategoriesFromBackend,
-    fetchTransactionsFromBackend,
-    isAuthenticated,
-    hasHydrated,
-    t,
-    router,
-  ]);
-
-  // DEBUG: Wrap dashboard in try/catch to log rendering errors
-  let dashboardContent;
-  try {
-    dashboardContent = (
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <MonthSelector />
-        {/* Debug components TrpcTestComponent and AutoLoginHelper removed */}
-        {loading ? (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-              marginTop: 32,
-            }}
-          >
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={{ textAlign: "center", marginTop: 8 }}>
-              {t("sending")}
-            </Text>
-          </View>
-        ) : error ? (
-          <View
-            style={{
-              backgroundColor: colors.danger + "33", // Use danger color with 33 alpha for transparency
-              borderRadius: 8,
-              padding: 16,
-              flexDirection: "row",
-              alignItems: "center",
-              marginTop: 32,
-              marginHorizontal: 16,
-            }}
-          >
-            <AntDesign
-              name="warning"
-              size={24}
-              color={colors.danger}
-              style={{ marginRight: 8 }}
+  return (
+    <>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {income === 0 ? (
+            <EmptyState
+              title={t("welcomeToBudget")}
+              description={t("startBySettingIncome")}
+              buttonText={t("setIncome")}
+              onPress={() => setIncomeModalVisible(true)}
             />
-            <Text
-              style={{
-                color: colors.danger,
-                fontSize: 16,
-                flexShrink: 1, // Allow text to wrap
-              }}
-            >
-              {error}
-            </Text>
-          </View>
-        ) : income === 0 ? (
-          <EmptyState
-            title={t("welcomeToBudget")}
-            description={t("startBySettingIncome")}
-            buttonText={t("setIncome")}
-            onPress={() => setIncomeModalVisible(true)}
-          />
-        ) : (
-          <>
-            <View style={styles.header}>
-              <BudgetSummary />
-              <Pressable
-                style={[styles.incomeButton, isRTL && styles.rtlFlexRow]}
-                onPress={() => setIncomeModalVisible(true)}
-              >
-                <AntDesign name="wallet" size={20} color="white" />
-                <Text style={[styles.incomeButtonText, { color: "white" }]}>
-                  {t("setIncome")}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={styles.section}>
-              <View
-                style={[
-                  styles.sectionHeader,
-                  isRTL && styles.rtlFlexRowReverse,
-                ]}
-              >
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  {t("topCategories")}
-                </Text>
-                <Pressable onPress={() => router.push("/categories")}>
+          ) : (
+            <>
+              <MonthSelector />
+
+              {/* Consolidated Banner Management */}
+              <BannerManager />
+
+              <View style={styles.header}>
+                <BudgetSummary />
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.incomeButton,
+                    isRTL && styles.rtlFlexRow,
+                    { backgroundColor: `${colors.primary}15` },
+                    { borderRadius: BorderRadius.medium },
+                    pressed && PressableStates.pressed,
+                  ]}
+                  onPress={() => setIncomeModalVisible(true)}
+                >
+                  <DollarSign
+                    size={18}
+                    color={colors.primary}
+                    strokeWidth={2.5}
+                  />
                   <Text
-                    style={[styles.seeAllButton, { color: colors.primary }]}
+                    style={[
+                      styles.incomeButtonText,
+                      {
+                        color: colors.primary,
+                        fontSize: (Typography.subtitle as any).fontSize,
+                        fontWeight: (Typography.subtitle as any).fontWeight,
+                        letterSpacing: (Typography.subtitle as any)
+                          .letterSpacing,
+                      },
+                    ]}
                   >
-                    {t("seeAll")}
+                    {t("updateIncome")}
                   </Text>
                 </Pressable>
               </View>
-              {categories.length === 0 ? (
+              <View style={styles.section}>
                 <View
                   style={[
-                    styles.emptyCategories,
-                    { backgroundColor: colors.card },
+                    styles.sectionHeader,
+                    isRTL && styles.rtlFlexRowReverse,
                   ]}
                 >
                   <Text
                     style={[
-                      styles.emptyCategoriesText,
-                      { color: colors.subtext },
+                      styles.sectionTitle,
+                      {
+                        color: colors.text,
+                        fontSize: (Typography.title as any).fontSize,
+                        fontWeight: (Typography.title as any).fontWeight,
+                        letterSpacing: (Typography.title as any).letterSpacing,
+                      },
                     ]}
                   >
-                    {t("youHaventCreatedCategories")}
+                    {t("topCategories")}
                   </Text>
-                  <Pressable
-                    style={[
-                      styles.createCategoryButton,
-                      { backgroundColor: colors.primary },
-                    ]}
-                    onPress={() => router.push("/categories")}
+                  <View
+                    style={{
+                      flexDirection: isRTL ? "row-reverse" : "row",
+                      alignItems: "center",
+                      gap: 12,
+                      backgroundColor: colors.cardElevated,
+                      borderRadius: 24,
+                      paddingVertical: 4,
+                      paddingHorizontal: 8,
+                      shadowColor: colors.primary,
+                      shadowOpacity: 0.07,
+                      shadowRadius: 6,
+                      elevation: 2,
+                      alignSelf: "flex-start",
+                      marginBottom: 4,
+                    }}
                   >
-                    <Text style={styles.createCategoryButtonText}>
-                      {t("createCategories")}
-                    </Text>
-                  </Pressable>
+                    <Animated.View
+                      style={{ transform: [{ scale: seeAllScale }] }}
+                    >
+                      <Pressable
+                        onPress={() => router.push("/(tabs)/categories" as any)}
+                        onPressIn={() => animateScale(seeAllScale, 0.96)}
+                        onPressOut={() => animateScale(seeAllScale, 1)}
+                        style={({ pressed }) => [
+                          {
+                            paddingVertical: 8,
+                            paddingHorizontal: 18,
+                            borderRadius: 16,
+                            backgroundColor: pressed
+                              ? String(colors.primary + "10")
+                              : "transparent",
+                            borderWidth: 1,
+                            borderColor: String(colors.primary + "30"),
+                            marginRight: isRTL ? 0 : 6,
+                            marginLeft: isRTL ? 6 : 0,
+                            minWidth: 64,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={t("seeAll")}
+                      >
+                        <Text
+                          style={[
+                            styles.seeAllButton,
+                            {
+                              color: colors.primary,
+                              fontWeight: "700" as any,
+                              fontSize: (Typography.caption as any).fontSize,
+                              letterSpacing: (Typography.caption as any)
+                                .letterSpacing,
+                            },
+                          ]}
+                        >
+                          {t("seeAll")}
+                        </Text>
+                      </Pressable>
+                    </Animated.View>
+                    {categories.length > 0 && (
+                      <Animated.View
+                        style={{ transform: [{ scale: plusScale }] }}
+                      >
+                        <Pressable
+                          onPress={() => setAddCategoryModalVisible(true)}
+                          onPressIn={() => animateScale(plusScale, 0.92)}
+                          onPressOut={() => animateScale(plusScale, 1)}
+                          style={({ pressed }) => [
+                            {
+                              width: 40,
+                              height: 40,
+                              borderRadius: 20,
+                              backgroundColor: pressed
+                                ? String(colors.cardElevated || "#222")
+                                : String(colors.card),
+                              alignItems: "center",
+                              justifyContent: "center",
+                              marginLeft: isRTL ? 0 : 6,
+                              marginRight: isRTL ? 6 : 0,
+                              borderWidth: 2,
+                              borderColor: String(colors.primary),
+                              shadowColor: String(colors.primary),
+                              shadowOpacity: 0.1,
+                              shadowRadius: 3,
+                              elevation: 2,
+                            },
+                          ]}
+                          accessibilityRole="button"
+                          accessibilityLabel={t("addCategory")}
+                          accessibilityHint={t("createCategories")}
+                        >
+                          <Plus
+                            size={20}
+                            color={colors.primary}
+                            strokeWidth={2.5}
+                          />
+                        </Pressable>
+                      </Animated.View>
+                    )}
+                  </View>
                 </View>
-              ) : (
-                <>
-                  {topCategories.map((category, idx) => {
-                    // DEBUG: Log each category and its type
-                    if (
-                      typeof category !== "object" ||
-                      category === null ||
-                      !category.id
-                    ) {
-                      console.error(
-                        "Invalid category in topCategories:",
-                        category,
-                        idx
-                      );
-                    }
-                    return (
+                {categories.length === 0 ? (
+                  <View
+                    style={[
+                      styles.emptyCategories,
+                      { backgroundColor: colors.cardElevated },
+                      Shadows.small,
+                      { borderRadius: BorderRadius.large },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.emptyCategoriesText,
+                        {
+                          color: colors.subtext,
+                          fontSize: (Typography.body as any).fontSize,
+                          fontWeight: (Typography.body as any).fontWeight,
+                          letterSpacing: (Typography.body as any).letterSpacing,
+                        },
+                      ]}
+                    >
+                      {t("youHaventCreatedCategories")}
+                    </Text>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.createCategoryButton,
+                        { backgroundColor: colors.primary },
+                        Shadows.medium,
+                        { borderRadius: BorderRadius.medium },
+                        pressed && PressableStates.pressed,
+                      ]}
+                      onPress={() => setAddCategoryModalVisible(true)}
+                    >
+                      <Plus size={18} color="white" />
+                      <Text
+                        style={[
+                          styles.createCategoryButtonText,
+                          {
+                            fontSize: (Typography.subtitle as any).fontSize,
+                            fontWeight: (Typography.subtitle as any).fontWeight,
+                            lineHeight: (Typography.subtitle as any).lineHeight,
+                          },
+                        ]}
+                      >
+                        {t("createCategories")}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    {topCategories.map((category) => (
                       <CategoryCard
                         key={category.id}
                         category={category}
                         onPress={() => handleCategoryPress(category.id)}
                       />
-                    );
-                  })}
-                </>
-              )}
-            </View>
-          </>
-        )}
-      </ScrollView>
-    );
-  } catch (err) {
-    console.error("DASHBOARD RENDER ERROR:", err);
-    dashboardContent = (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <Text style={{ color: "red", fontSize: 16, margin: 20 }}>
-          Dashboard render error: {String(err)}
-        </Text>
+                    ))}
+                    {isDemoMode && (
+                      <Text
+                        style={[
+                          styles.demoNotice,
+                          { color: colors.subtext },
+                          {
+                            fontSize: (Typography.caption as any).fontSize,
+                            fontWeight: (Typography.caption as any).fontWeight,
+                            lineHeight: (Typography.caption as any).lineHeight,
+                          },
+                        ]}
+                      >
+                        {t("notification")}
+                      </Text>
+                    )}
+                  </>
+                )}
+              </View>
+            </>
+          )}
+        </ScrollView>
+        <Pressable
+          style={{
+            position: "absolute",
+            right: 24,
+            bottom: 32,
+            backgroundColor: colors.primary,
+            width: 60,
+            height: 60,
+            borderRadius: 30,
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: colors.primary,
+            shadowOpacity: 0.18,
+            shadowRadius: 8,
+            elevation: 4,
+          }}
+          onPress={() => {
+            if (!income) {
+              setIncomeModalVisible(true);
+            } else if (categories.length === 0) {
+              setAddCategoryModalVisible(true);
+            } else {
+              setTransactionModalVisible(true);
+            }
+          }}
+          accessibilityLabel={
+            !income
+              ? t("setIncome")
+              : categories.length === 0
+              ? t("addCategory")
+              : t("addTransaction")
+          }
+        >
+          <Plus size={32} color="#fff" />
+        </Pressable>
+        <SetIncomeModal
+          visible={incomeModalVisible}
+          onClose={() => setIncomeModalVisible(false)}
+        />
+        <AddTransactionModal
+          visible={transactionModalVisible}
+          categoryId={selectedCategoryId}
+          onClose={() => setTransactionModalVisible(false)}
+        />
+        <AddCategoryModal
+          visible={addCategoryModalVisible}
+          onClose={() => setAddCategoryModalVisible(false)}
+        />
       </View>
-    );
-  }
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {dashboardContent}
-      {income > 0 && categories.length > 0 && (
-        <View style={styles.fabContainer}>
-          <Pressable
-            style={[styles.fab, { backgroundColor: colors.primary }]}
-            onPress={() => handleAddTransaction()}
-          >
-            <AntDesign name="plus" size={24} color="white" />
-          </Pressable>
-        </View>
-      )}
-      <AddTransactionModal
-        visible={transactionModalVisible}
-        onClose={async () => {
-          setTransactionModalVisible(false);
-          setSelectedCategoryId(undefined);
-          const [year, month] = selectedMonth.split("-").map(Number);
-          fetchTransactionsFromBackend &&
-            fetchTransactionsFromBackend(year, month);
-          fetchCategoriesFromBackend && fetchCategoriesFromBackend();
-          fetchBudgetFromBackend && fetchBudgetFromBackend(year, month); // <-- re-fetch budget after modal
-        }}
-        categoryId={selectedCategoryId}
-      />
-      <SetIncomeModal
-        visible={incomeModalVisible}
-        onClose={() => setIncomeModalVisible(false)}
-      />
-    </View>
+    </>
   );
 }
 
@@ -325,17 +424,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 80,
+    padding: Spacing.m,
+    paddingBottom: Spacing.xxl * 2.5,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: Spacing.l,
   },
   incomeButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 8,
+    paddingVertical: Spacing.s,
+    paddingHorizontal: Spacing.m,
+    marginTop: Spacing.m,
+    borderWidth: 1,
+    borderColor: "transparent",
   },
   rtlFlexRow: {
     flexDirection: "row-reverse",
@@ -344,63 +447,64 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
   },
   incomeButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    marginLeft: 4,
-    marginRight: 4,
+    marginLeft: Spacing.xs,
+    marginRight: Spacing.xs,
+    // Typography.subtitle is applied in the component
   },
   section: {
-    marginBottom: 24,
+    marginBottom: Spacing.l,
   },
   sectionHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    justifyContent: "space-between",
+    marginBottom: Spacing.m,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    // Typography.title is applied in the component
   },
   seeAllButton: {
-    fontSize: 14,
-    fontWeight: "500",
+    textDecorationLine: "underline",
+    // Typography.caption is applied in the component
   },
   emptyCategories: {
-    borderRadius: 16,
-    padding: 20,
+    padding: Spacing.m,
     alignItems: "center",
+    marginBottom: Spacing.m,
   },
   emptyCategoriesText: {
-    fontSize: 14,
     textAlign: "center",
-    marginBottom: 16,
+    marginBottom: Spacing.m,
+    // Typography.body is applied in the component
   },
   createCategoryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.s,
+    paddingHorizontal: Spacing.m,
   },
   createCategoryButtonText: {
     color: "white",
-    fontSize: 14,
-    fontWeight: "500",
+    marginLeft: Spacing.s,
+    // Typography.subtitle is applied in the component
   },
   fabContainer: {
     position: "absolute",
-    right: 16,
-    bottom: 16,
+    bottom: Spacing.m,
+    right: Spacing.m,
   },
   fab: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: BorderRadius.circle / 2,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    ...(Shadows.medium as object),
+  },
+  demoNotice: {
+    textAlign: "center",
+    marginTop: Spacing.m,
+    fontStyle: "italic",
+    // Typography.caption is applied in the component
   },
 });

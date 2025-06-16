@@ -1,20 +1,33 @@
 import React, { useEffect } from "react";
 import { View, Text, StyleSheet, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
-import useAuthStore from "@/store/auth-store";
-import { AntDesign, MaterialIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import useAppTheme from "../../hooks/useAppTheme";
+import useLanguageStore from "../../store/language-store";
+import useAuthStore from "../../store/auth-store";
+import { LogOut, User } from "lucide-react-native";
+import LoginScreen from "../login";
 
 export default function SignInScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useAppTheme();
   const { t } = useLanguageStore();
-  const { isAuthenticated, clearAuth, user } = useAuthStore(); // Changed logout to clearAuth
+  const { isAuthenticated, logout, user } = useAuthStore();
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (!isAuthenticated) {
+        e.preventDefault();
+        router.replace("../.."); // Go to Home tab (index)
+      }
+    });
+    return unsubscribe;
+  }, [isAuthenticated, navigation, router]);
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.replace("/login");
+      router.replace("../login");
     }
   }, [isAuthenticated, router]);
 
@@ -24,8 +37,8 @@ export default function SignInScreen() {
       {
         text: t("logout"),
         onPress: () => {
-          clearAuth(); // Changed logout() to clearAuth()
-          router.replace("/login");
+          logout();
+          router.replace("../login");
         },
         style: "destructive",
       },
@@ -33,47 +46,47 @@ export default function SignInScreen() {
   };
 
   if (!isAuthenticated) {
-    return null; // This won't be shown as the useEffect will redirect to login
+    // Show the login form directly in the tab
+    return <LoginScreen />;
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.profileContainer, { backgroundColor: colors.card }]}>
+    <>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View
-          style={[
-            styles.profileIcon,
-            { backgroundColor: `${colors.primary}20` },
-          ]}
+          style={[styles.profileContainer, { backgroundColor: colors.card }]}
         >
-          <AntDesign name="user" size={40} color={colors.primary} />
+          <View
+            style={[
+              styles.profileIcon,
+              { backgroundColor: `${colors.primary}20` },
+            ]}
+          >
+            <User size={40} color={colors.primary} />
+          </View>
+          <Text style={[styles.profileName, { color: colors.text }]}>
+            {user?.email || t("user")}
+          </Text>
+          <Text style={[styles.profileRole, { color: colors.subtext }]}>
+            {t("standardUser")}
+          </Text>
         </View>
-        <Text style={[styles.profileName, { color: colors.text }]}>
-          {user?.email || t("user")}
-        </Text>
-        <Text style={[styles.profileRole, { color: colors.subtext }]}>
-          {t("standardUser")}
+
+        <View style={styles.optionsContainer}>
+          <Pressable
+            style={[styles.optionButton, { backgroundColor: colors.danger }]}
+            onPress={handleLogout}
+          >
+            <LogOut size={16} color="white" style={styles.optionIcon} />
+            <Text style={styles.optionButtonText}>{t("logout")}</Text>
+          </Pressable>
+        </View>
+
+        <Text style={[styles.appVersion, { color: colors.subtext }]}>
+          {t("appVersion")} 1.0.0
         </Text>
       </View>
-
-      <View style={styles.optionsContainer}>
-        <Pressable
-          style={[styles.optionButton, { backgroundColor: colors.danger }]}
-          onPress={handleLogout}
-        >
-          <MaterialIcons
-            name="logout"
-            size={16}
-            color="white"
-            style={styles.optionIcon}
-          />
-          <Text style={styles.optionButtonText}>{t("logout")}</Text>
-        </Pressable>
-      </View>
-
-      <Text style={[styles.appVersion, { color: colors.subtext }]}>
-        {t("appVersion")} 1.0.0
-      </Text>
-    </View>
+    </>
   );
 }
 

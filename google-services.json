@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "744936464635",
+    "project_id": "elegantbudgettracker",
+    "storage_bucket": "elegantbudgettracker.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:744936464635:android:931c0baefbbe36d7c9505e",
+        "android_client_info": {
+          "package_name": "com.alhajeritech.trackbudgetpro"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkhnoEW4A_R_w-u4DpFlmgIO55lY-rMZU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

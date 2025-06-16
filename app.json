@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "TrackBudget Pro",
-    "slug": "trackbudgetpro",
+    "name": "Elegant Budget Tracker",
+    "slug": "elegant-budget-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,11 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.alhajerytech.trackbudgetpro",
+      "bundleIdentifier": "com.alhajeritech.trackbudgetpro",
       "buildNumber": "1",
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan receipts for expense tracking.",
-        "NSPhotoLibraryUsageDescription": "This app accesses your photos to upload receipts for expense tracking."
+        "NSPhotoLibraryUsageDescription": "This app accesses your photos to upload receipts for expense tracking.",
+        "UIBackgroundModes": ["background-fetch", "background-processing"]
       }
     },
     "android": {
@@ -27,52 +28,62 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.alhajerytech.trackbudgetpro",
+      "package": "com.alhajeritech.trackbudgetpro",
       "versionCode": 1,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
-      ]
+      ],
+      "edgeToEdgeEnabled": true
     },
     "web": {
       "favicon": "./assets/images/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://trackbudgetpro.com"
-        }
-      ],
+      ["expo-router"],
       [
         "expo-camera",
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan receipts for expense tracking."
         }
       ],
-      "expo-in-app-purchases"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#ffffff",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "@react-native-firebase/app",
+        {
+          "android": {
+            "googleServicesFile": "./google-services.json"
+          },
+          "ios": {
+            "googleServicesPlist": "./GoogleService-Info.plist"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "updates": {
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/b15c6085-cbc9-4e70-9163-61b86314111c"
+      "url": "https://u.expo.dev/your-project-id"
     },
     "runtimeVersion": {
       "policy": "sdkVersion"
     },
     "extra": {
-      "eas": {
-        "projectId": "b15c6085-cbc9-4e70-9163-61b86314111c"
-      },
       "router": {
-        "origin": "https://trackbudgetpro.com"
+        "origin": "https://alhajeritech.com/"
       }
     },
-    "owner": "alhajerytech",
-    "jsEngine": "jsc"
+    "owner": "alhajeritech"
   }
 }

@@ -11,9 +11,9 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { AntDesign, Feather } from "@expo/vector-icons";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import { X, Send } from "lucide-react-native";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
 import { debounce } from "lodash";
 
 interface FeedbackModalProps {
@@ -51,14 +51,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
   const validateFeedback = useCallback(
     debounce((value: string) => {
       if (!value.trim()) {
-        setFeedbackError(t("pleaseEnterYourFeedback"));
+        setFeedbackError(t("error"));
         return false;
       }
 
       // Check for potentially harmful content
       for (const pattern of HARMFUL_PATTERNS) {
         if (pattern.test(value)) {
-          setFeedbackError(t("feedbackContainsInvalidContent"));
+          setFeedbackError(t("error"));
           return false;
         }
       }
@@ -89,7 +89,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
     // For now, we'll just simulate a submission
     setTimeout(() => {
       setIsSubmitting(false);
-      Alert.alert(t("thankYou"), t("feedbackSubmitted"), [
+      Alert.alert(t("success"), t("notification"), [
         {
           text: "OK",
           onPress: () => {
@@ -135,16 +135,16 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
             ]}
           >
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {t("sendFeedback")}
+              {t("feedback")}
             </Text>
             <Pressable onPress={handleClose} hitSlop={10}>
-              <AntDesign name="close" size={24} color={colors.text} />
+              <X size={24} color={colors.text} />
             </Pressable>
           </View>
 
           <View style={styles.form}>
             <Text style={[styles.label, { color: colors.text }]}>
-              {t("feedbackType")}
+              {t("category")}
             </Text>
             <View
               style={[styles.typeContainer, isRTL && styles.typeContainerRTL]}
@@ -170,7 +170,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
                     feedbackType === "feature" && { color: colors.primary },
                   ]}
                 >
-                  {t("featureRequest")}
+                  Feature Request
                 </Text>
               </Pressable>
 
@@ -195,7 +195,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
                     feedbackType === "bug" && { color: colors.danger },
                   ]}
                 >
-                  {t("reportBug")}
+                  Bug Report
                 </Text>
               </Pressable>
 
@@ -204,8 +204,8 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
                   styles.typeButton,
                   { borderColor: colors.border },
                   feedbackType === "general" && {
-                    backgroundColor: `${colors.info}20`,
-                    borderColor: colors.info,
+                    backgroundColor: `${colors.secondary}20`,
+                    borderColor: colors.secondary,
                   },
                 ]}
                 onPress={() => setFeedbackType("general")}
@@ -217,16 +217,16 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
                   style={[
                     styles.typeButtonText,
                     { color: colors.text },
-                    feedbackType === "general" && { color: colors.info },
+                    feedbackType === "general" && { color: colors.secondary },
                   ]}
                 >
-                  {t("general")}
+                  General Feedback
                 </Text>
               </Pressable>
             </View>
 
             <Text style={[styles.label, { color: colors.text }]}>
-              {t("yourFeedback")}
+              {t("feedback")}
             </Text>
             <TextInput
               style={[
@@ -240,13 +240,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
               ]}
               value={feedback}
               onChangeText={handleFeedbackChange}
-              placeholder={
-                feedbackType === "feature"
-                  ? t("describeFeature")
-                  : feedbackType === "bug"
-                  ? t("describeIssue")
-                  : t("shareThoughts")
-              }
+              placeholder={t("description")}
               placeholderTextColor={colors.subtext}
               multiline
               numberOfLines={6}
@@ -282,12 +276,7 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
                 <ActivityIndicator size="small" color="white" />
               ) : (
                 <>
-                  <Feather
-                    name="send"
-                    size={18}
-                    color="white"
-                    style={styles.submitIcon}
-                  />
+                  <Send size={18} color="white" style={styles.submitIcon} />
                   <Text style={styles.submitButtonText}>
                     {t("sendFeedback")}
                   </Text>

@@ -9,12 +9,19 @@ import {
   TextInput,
   Dimensions,
 } from "react-native";
-import { AntDesign, Feather } from "@expo/vector-icons";
-import useBudgetStore from "@/store/budget-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
-import { defaultCurrencies } from "@/constants/currencies";
-import { Currency } from "@/types/budget";
+import { X, Check, Search } from "lucide-react-native";
+import useBudgetStore from "../store/budget-store";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
+import { defaultCurrencies } from "../constants/currencies";
+import {
+  Typography,
+  BorderRadius,
+  Shadows,
+  Spacing,
+  PressableStates,
+  InputStyles,
+} from "../constants/styleGuide";
 
 interface CurrencySelectorProps {
   visible: boolean;
@@ -63,17 +70,24 @@ const CurrencySelector: React.FC<CurrencySelectorProps> = ({
     onSelect(currencyCode);
   };
 
-  const renderCurrencyItem = ({ item }: { item: Currency }) => (
+  const renderCurrencyItem = ({
+    item,
+  }: {
+    item: (typeof defaultCurrencies)[0];
+  }) => (
     <Pressable
-      style={[
+      style={({ pressed }) => [
         styles.currencyItem,
         { borderBottomColor: colors.border },
         localSelectedCurrency === item.code && {
           backgroundColor: `${colors.primary}10`,
         },
+        pressed && PressableStates.pressed,
         isRTL && styles.rtlFlexRowReverse,
       ]}
       onPress={() => handleCurrencySelect(item.code)}
+      accessibilityLabel={`${item.name} ${item.code}`}
+      accessibilityState={{ selected: localSelectedCurrency === item.code }}
     >
       <View style={styles.currencyInfo}>
         <Text style={[styles.currencyCode, { color: colors.text }]}>
@@ -84,7 +98,7 @@ const CurrencySelector: React.FC<CurrencySelectorProps> = ({
         </Text>
       </View>
       {localSelectedCurrency === item.code && (
-        <AntDesign name="check" size={20} color={colors.primary} />
+        <Check size={20} color={colors.primary} />
       )}
     </Pressable>
   );
@@ -112,22 +126,32 @@ const CurrencySelector: React.FC<CurrencySelectorProps> = ({
               isRTL && styles.rtlFlexRowReverse,
             ]}
           >
-            <Text style={[styles.modalTitle, { color: colors.text }]}>
-              {t("selectCurrency")}
+            <Text
+              style={[
+                styles.modalTitle,
+                { color: colors.text },
+                Typography.title,
+              ]}
+            >
+              {t("currency")}
             </Text>
-            <Pressable onPress={onClose} hitSlop={10}>
-              <AntDesign name="close" size={24} color={colors.text} />
+            <Pressable
+              onPress={onClose}
+              hitSlop={10}
+              style={({ pressed }) => pressed && PressableStates.pressed}
+            >
+              <X size={24} color={colors.text} />
             </Pressable>
           </View>
 
           <View
             style={[
               styles.searchContainer,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              InputStyles.regular(colors.border, colors.card),
               isRTL && styles.rtlFlexRowReverse,
             ]}
           >
-            <Feather name="search" size={20} color={colors.subtext} />
+            <Search size={20} color={colors.subtext} />
             <TextInput
               style={[
                 styles.searchInput,
@@ -135,21 +159,33 @@ const CurrencySelector: React.FC<CurrencySelectorProps> = ({
                   color: colors.text,
                   textAlign: isRTL ? "right" : "left",
                 },
+                Typography.body,
               ]}
-              placeholder={t("searchCurrencies")}
+              placeholder={t("searchCurrency")}
               placeholderTextColor={colors.subtext}
               value={searchQuery}
               onChangeText={setSearchQuery}
+              accessibilityLabel={t("searchCurrency")}
             />
             {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery("")}>
-                <AntDesign name="close" size={18} color={colors.subtext} />
+              <Pressable
+                onPress={() => setSearchQuery("")}
+                hitSlop={10}
+                style={({ pressed }) => pressed && PressableStates.pressed}
+              >
+                <X size={18} color={colors.subtext} />
               </Pressable>
             )}
           </View>
 
-          <Text style={[styles.currencyCount, { color: colors.subtext }]}>
-            {filteredCurrencies.length} currencies available
+          <Text
+            style={[
+              styles.currencyCount,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {filteredCurrencies.length} {t("currenciesAvailable")}
           </Text>
 
           <FlatList
@@ -160,6 +196,7 @@ const CurrencySelector: React.FC<CurrencySelectorProps> = ({
             showsVerticalScrollIndicator={false}
             initialNumToRender={20}
             maxToRenderPerBatch={20}
+            accessibilityLabel={t("currenciesList")}
           />
         </View>
       </View>
@@ -177,6 +214,11 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingBottom: 20,
     height: Dimensions.get("window").height * 0.5, // Explicitly set to 50% of viewport height
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: "row",
@@ -192,12 +234,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: "600",
+    letterSpacing: 0.3,
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 12,
     margin: 16,
     height: 44,
@@ -208,11 +251,13 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginRight: 8,
     height: 44,
+    letterSpacing: 0.2,
   },
   currencyCount: {
     fontSize: 14,
     marginHorizontal: 16,
     marginBottom: 8,
+    letterSpacing: 0.1,
   },
   currencyList: {
     flex: 1,
@@ -233,9 +278,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 2,
+    letterSpacing: 0.2,
   },
   currencyName: {
     fontSize: 14,
+    letterSpacing: 0.1,
   },
 });
+
 export default CurrencySelector;

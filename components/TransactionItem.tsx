@@ -8,28 +8,38 @@ import {
   Modal,
   Alert,
 } from "react-native";
-import { AntDesign } from "@expo/vector-icons";
-import { Transaction } from "@/types/budget";
-import useBudgetStore from "@/store/budget-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import { Trash2, Receipt, X } from "lucide-react-native";
+import { Transaction, Category, Currency } from "../types/budget";
+import useBudgetStore from "../store/budget-store";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
+import {
+  Typography,
+  BorderRadius,
+  Shadows,
+  Spacing,
+  PressableStates,
+} from "../constants/styleGuide";
 
 interface TransactionItemProps {
   transaction: Transaction;
   onDelete: () => void;
 }
 
+// Updated styles and layout to match the legacy design while preserving technical enhancements.
 const TransactionItem: React.FC<TransactionItemProps> = ({
   transaction,
   onDelete,
 }) => {
-  const { categories, baseCurrency, currencies, receipts } = useBudgetStore();
+  const { categories, baseCurrency, currencies } = useBudgetStore();
   const { colors } = useAppTheme();
   const { t, isRTL } = useLanguageStore();
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
 
-  const category = categories.find((c) => c.id === transaction.categoryId);
-  const receiptImage = receipts[transaction.id];
+  const category = categories.find(
+    (c: Category) => c.id === transaction.categoryId
+  );
+  const receiptImageUri = transaction.receiptImageUri || null;
 
   const date = new Date(transaction.date);
   const formattedDate = date.toLocaleDateString("en-US", {
@@ -42,21 +52,12 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
     minute: "2-digit",
   });
 
-  // Get currency information
   const currencySymbol =
-    currencies.find((c) => c.code === baseCurrency)?.symbol || baseCurrency;
-
-  // Replace t('confirmDelete') and similar with fallback strings if not in translations
-  const confirmDelete = t("confirmDelete") || "Delete Transaction";
-  const areYouSureDeleteTransaction =
-    t("areYouSureDeleteTransaction") ||
-    "Are you sure you want to delete this transaction?";
-  const failedToLoadReceiptImage =
-    t("failedToLoadReceiptImage") || "Failed to load receipt image.";
-  const unknown = t("unknown") || "Unknown";
+    currencies.find((c: Currency) => c.code === baseCurrency)?.symbol ||
+    baseCurrency;
 
   const handleDelete = () => {
-    Alert.alert(confirmDelete, areYouSureDeleteTransaction, [
+    Alert.alert(t("confirmDelete"), t("areYouSureDeleteTransaction"), [
       { text: t("cancel"), style: "cancel" },
       { text: t("delete"), onPress: onDelete, style: "destructive" },
     ]);
@@ -66,102 +67,111 @@ const TransactionItem: React.FC<TransactionItemProps> = ({
     <View style={[styles.container, { borderBottomColor: colors.border }]}>
       <View style={[styles.content, isRTL && styles.rtlFlexRowReverse]}>
         <View style={styles.mainInfo}>
-          <Text style={[styles.description, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.description,
+              { color: colors.text },
+              {
+                fontSize: (Typography.subtitle as any).fontSize,
+                fontWeight: (Typography.subtitle as any).fontWeight,
+                lineHeight: (Typography.subtitle as any).lineHeight,
+              },
+            ]}
+          >
             {transaction.description}
           </Text>
-          <Text style={[styles.category, { color: colors.subtext }]}>
-            {category?.name || "Unknown Category"}
+          <Text
+            style={[
+              styles.category,
+              { color: colors.subtext },
+              {
+                fontSize: (Typography.caption as any).fontSize,
+                fontWeight: (Typography.caption as any).fontWeight,
+                lineHeight: (Typography.caption as any).lineHeight,
+              },
+            ]}
+          >
+            {category?.name || t("unknown")}
           </Text>
         </View>
-
         <View style={styles.rightContent}>
-          <Text style={[styles.amount, { color: colors.text }]}>
+          <Text
+            style={[
+              styles.amount,
+              { color: colors.text },
+              {
+                fontSize: (Typography.subtitle as any).fontSize,
+                fontWeight: (Typography.subtitle as any).fontWeight,
+                lineHeight: (Typography.subtitle as any).lineHeight,
+              },
+            ]}
+          >
             -{currencySymbol}
             {transaction.amount.toFixed(2)}
           </Text>
-          <Text style={[styles.date, { color: colors.subtext }]}>
-            {formattedDate} • {formattedTime}
+          <Text
+            style={[
+              styles.date,
+              { color: colors.subtext },
+              {
+                fontSize: (Typography.caption as any).fontSize,
+                fontWeight: (Typography.caption as any).fontWeight,
+                lineHeight: (Typography.caption as any).lineHeight,
+              },
+            ]}
+          >
+            {formattedDate} {formattedTime}
           </Text>
         </View>
       </View>
 
-      <View style={[styles.actions, isRTL && styles.rtlFlexRowReverse]}>
-        {receiptImage && (
+      <View style={styles.actions}>
+        {receiptImageUri && (
           <Pressable
             style={styles.receiptButton}
             onPress={() => setReceiptModalVisible(true)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <AntDesign name="filetext1" size={16} color={colors.primary} />
+            <Receipt size={18} color={colors.primary} />
           </Pressable>
         )}
-
-        <Pressable
-          style={styles.deleteButton}
-          onPress={handleDelete}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <AntDesign name="delete" size={16} color={colors.danger} />
+        <Pressable style={styles.deleteButton} onPress={handleDelete}>
+          <Trash2 size={18} color={colors.danger} />
         </Pressable>
       </View>
 
-      {/* Receipt Modal */}
-      <Modal
-        visible={receiptModalVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setReceiptModalVisible(false)}
-      >
-        <View
-          style={[
-            styles.modalContainer,
-            { backgroundColor: "rgba(0, 0, 0, 0.7)" },
-          ]}
+      {receiptImageUri && (
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={receiptModalVisible}
+          onRequestClose={() => setReceiptModalVisible(false)}
         >
-          <View style={styles.modalContent}>
-            <View
-              style={[styles.modalHeader, isRTL && styles.rtlFlexRowReverse]}
-            >
-              <Text style={styles.modalTitle}>{t("receipt")}</Text>
-              <Pressable onPress={() => setReceiptModalVisible(false)}>
-                <AntDesign name="close" size={24} color="white" />
+          <View style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{t("receipt")}</Text>
+                <Pressable onPress={() => setReceiptModalVisible(false)}>
+                  <X size={20} color="white" />
+                </Pressable>
+              </View>
+              <Image
+                source={{ uri: receiptImageUri }}
+                style={styles.receiptImage}
+                resizeMode="contain"
+              />
+              <Pressable
+                style={[
+                  styles.closeButton,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={() => setReceiptModalVisible(false)}
+              >
+                <Text style={styles.closeButtonText}>{t("close")}</Text>
               </Pressable>
             </View>
-
-            <Image
-              source={{ uri: receiptImage }}
-              style={styles.receiptImage}
-              resizeMode="contain"
-              onError={(error) => {
-                console.error("Error loading receipt image:", error);
-                Alert.alert(t("error"), failedToLoadReceiptImage, [
-                  { text: "OK" },
-                ]);
-                setReceiptModalVisible(false);
-              }}
-            />
-
-            {transaction.receiptData && (
-              <View style={styles.receiptData}>
-                <Text style={styles.receiptDataText}>
-                  {t("merchant")}: {transaction.receiptData.merchant || unknown}
-                </Text>
-                <Text style={styles.receiptDataText}>
-                  {t("total")}: {currencySymbol}
-                  {transaction.receiptData.total?.toFixed(2) || "N/A"}
-                </Text>
-              </View>
-            )}
-
-            <Pressable
-              style={[styles.closeButton, { backgroundColor: colors.primary }]}
-              onPress={() => setReceiptModalVisible(false)}
-            >
-              <Text style={styles.closeButtonText}>{t("close")}</Text>
-            </Pressable>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
     </View>
   );
 };
@@ -170,7 +180,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: Spacing.m,
     borderBottomWidth: 1,
   },
   content: {
@@ -183,59 +193,62 @@ const styles = StyleSheet.create({
   },
   mainInfo: {
     flex: 1,
-    marginRight: 8,
-    marginLeft: 8,
+    marginRight: Spacing.m,
+    marginLeft: Spacing.m,
   },
   description: {
-    fontSize: 16,
-    fontWeight: "500",
-    marginBottom: 2,
+    marginBottom: Spacing.xs,
+    // Using Typography.subtitle
   },
   category: {
-    fontSize: 14,
-    marginBottom: 2,
+    marginBottom: Spacing.xs,
+    // Using Typography.caption
   },
   rightContent: {
     alignItems: "flex-end",
   },
   amount: {
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 2,
+    marginBottom: Spacing.xs,
+    // Using Typography.subtitle
   },
   date: {
-    fontSize: 12,
+    // Using Typography.caption
   },
   actions: {
     flexDirection: "row",
-    marginLeft: 12,
-    marginRight: 12,
+    marginLeft: Spacing.m,
+    alignItems: "center",
   },
   receiptButton: {
-    padding: 8,
-    marginRight: 4,
-    marginLeft: 4,
+    padding: Spacing.s,
+    marginRight: Spacing.xs,
   },
   deleteButton: {
-    padding: 8,
+    padding: Spacing.s,
   },
   modalContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   modalContent: {
     width: "90%",
     maxHeight: "80%",
     backgroundColor: "#000",
-    borderRadius: 16,
+    borderRadius: BorderRadius.large,
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    padding: Spacing.m,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255, 255, 255, 0.2)",
   },
@@ -243,24 +256,27 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 18,
     fontWeight: "600",
+    letterSpacing: 0.3,
   },
   receiptImage: {
     width: "100%",
     height: 400,
   },
   receiptData: {
-    padding: 16,
+    padding: Spacing.m,
     backgroundColor: "rgba(255, 255, 255, 0.1)",
   },
   receiptDataText: {
     color: "white",
-    fontSize: 14,
-    marginBottom: 4,
+    fontSize: 16,
+    fontWeight: "400",
+    letterSpacing: 0.2,
+    marginBottom: Spacing.xs,
   },
   closeButton: {
-    margin: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
+    margin: Spacing.m,
+    paddingVertical: Spacing.m,
+    borderRadius: BorderRadius.small,
     alignItems: "center",
   },
   closeButtonText: {

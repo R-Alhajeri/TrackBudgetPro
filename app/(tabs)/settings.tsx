@@ -1,4 +1,3 @@
-"use client";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -8,36 +7,53 @@ import {
   Pressable,
   Switch,
   Alert,
-  I18nManager,
   ActivityIndicator,
   Linking,
-  Share,
   Platform,
 } from "react-native";
-import {
-  AntDesign,
-  Feather,
-  MaterialIcons,
-  FontAwesome,
-  Ionicons,
-  Entypo,
-} from "@expo/vector-icons";
-import useBudgetStore from "@/store/budget-store";
-import useThemeStore from "@/store/theme-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
-import useAuthStore from "@/store/auth-store";
-import FeedbackModal from "@/components/FeedbackModal";
-import CurrencySelector from "@/components/CurrencySelector";
-import LanguageSelector from "@/components/LanguageSelector";
-import * as Localization from "expo-localization";
 import { useRouter } from "expo-router";
+import {
+  ChevronRight,
+  HelpCircle,
+  Info,
+  Moon,
+  Sun,
+  Bell,
+  Trash2,
+  MessageSquare,
+  DollarSign,
+  Globe,
+  Download,
+  Upload,
+  Shield,
+  LogOut,
+  User,
+} from "lucide-react-native";
+import useBudgetStore from "../../store/budget-store";
+import useThemeStore from "../../store/theme-store";
+import useAppTheme from "../../hooks/useAppTheme";
+import useLanguageStore from "../../store/language-store";
+import useAuthStore from "../../store/auth-store";
+import FeedbackModal from "../../components/FeedbackModal";
+import CurrencySelector from "../../components/CurrencySelector";
+import LanguageSelector from "../../components/LanguageSelector";
+import SettingItem from "../../components/SettingItem";
+import useSubscriptionStore from "../../store/subscription-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 import * as DocumentPicker from "expo-document-picker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { trpc } from "@/lib/trpc";
-import * as WebBrowser from "expo-web-browser";
-import InAppSubscriptionSection from "@/components/InAppSubscriptionSection";
+import { Share } from "react-native";
+import * as XLSX from "xlsx";
+import NotificationSettings from "../../components/NotificationSettings";
+
+// Import the SettingItem component
+import {
+  Typography,
+  Shadows,
+  BorderRadius,
+  Spacing,
+  PressableStates,
+} from "../../constants/styleGuide";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -55,97 +71,35 @@ export default function SettingsScreen() {
   const { theme, toggleTheme, resetTheme } = useThemeStore();
   const { colors, isDark } = useAppTheme();
   const { t, isRTL, language, resetLanguage } = useLanguageStore();
-  const { isAuthenticated, userRole, clearAuth, user, resetAuth } =
-    useAuthStore(); // Changed logout to clearAuth
+  const { isAuthenticated, userRole, logout, user, resetAuth } = useAuthStore();
+  const { isSubscribed, subscriptionExpiry } = useSubscriptionStore();
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
   const [currencySelectorVisible, setCurrencySelectorVisible] = useState(false);
   const [languageSelectorVisible, setLanguageSelectorVisible] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-
-  useEffect(() => {
-    // Set default currency based on user's region
-    const setDefaultCurrency = async () => {
-      try {
-        const { region } = await Localization.getLocalizationAsync();
-        let defaultCurrency = "USD"; // Fallback to USD
-
-        // Map region to currency (this is a simplified mapping)
-        const regionCurrencyMap: Record<string, string> = {
-          US: "USD",
-          EU: "EUR",
-          GB: "GBP",
-          JP: "JPY",
-          CA: "CAD",
-          AU: "AUD",
-          AE: "AED",
-          SA: "SAR",
-          EG: "EGP",
-          IN: "INR",
-        };
-
-        if (region && regionCurrencyMap[region]) {
-          defaultCurrency = regionCurrencyMap[region];
-        } else if (region) {
-          // Extract the first two letters for a rough country code match
-          const countryCode = region
-            .split("-")[1]
-            ?.substring(0, 2)
-            .toUpperCase();
-          if (countryCode && regionCurrencyMap[countryCode]) {
-            defaultCurrency = regionCurrencyMap[countryCode];
-          }
-        }
-
-        // Only set the default currency if no budget data exists to avoid overwriting user data
-        if (
-          income === 0 &&
-          categories.length === 0 &&
-          transactions.length === 0
-        ) {
-          setBaseCurrency(defaultCurrency);
-        }
-      } catch (error) {
-        console.error(
-          "Error setting default currency based on location:",
-          error
-        );
-        // Fallback to USD if there's an error
-        if (
-          income === 0 &&
-          categories.length === 0 &&
-          transactions.length === 0
-        ) {
-          setBaseCurrency("USD");
-        }
-      }
-    };
-
-    setDefaultCurrency();
-  }, []); // Empty dependency array to run only once on mount
+  const [notificationSettingsVisible, setNotificationSettingsVisible] =
+    useState(false);
 
   const resetAllData = () => {
-    Alert.alert(t("resetAllDataTitle"), t("resetAllDataMessage"), [
+    Alert.alert(t("confirmDelete"), t("errorOccurred"), [
       {
         text: t("cancel"),
         style: "cancel",
       },
       {
-        text: t("reset"),
+        text: t("delete"),
         style: "destructive",
         onPress: async () => {
           try {
-            // Show loading indicator or disable UI during reset
-
-            // Reset all stores
             resetBudgetData();
             resetTheme();
-            resetLanguage();
 
-            // Only reset auth if user is logged in and confirms
+            if (resetLanguage) resetLanguage();
+
             if (isAuthenticated) {
-              Alert.alert(t("logoutConfirmation"), t("logoutWithReset"), [
+              Alert.alert(t("logout"), t("areYouSureToLogout"), [
                 {
                   text: t("cancel"),
                   style: "cancel",
@@ -155,28 +109,25 @@ export default function SettingsScreen() {
                   style: "destructive",
                   onPress: () => {
                     resetAuth();
-                    router.replace("/");
+                    router.replace("../..");
                   },
                 },
               ]);
             }
 
-            // Clear any other app data from AsyncStorage
             const keys = await AsyncStorage.getAllKeys();
             const keysToRemove = keys.filter(
               (key) =>
-                key !== "auth-storage" && // Keep auth if user didn't logout
-                key !== "language-storage" && // Language is reset separately
-                key !== "theme-storage" // Theme is reset separately
+                key !== "auth-storage" &&
+                key !== "language-storage" &&
+                key !== "theme-storage"
             );
 
             if (keysToRemove.length > 0) {
               await AsyncStorage.multiRemove(keysToRemove);
             }
 
-            Alert.alert(t("dataResetComplete"), t("allDataHasBeenReset"), [
-              { text: "OK" },
-            ]);
+            Alert.alert(t("success"), t("success"), [{ text: "OK" }]);
           } catch (error) {
             console.error("Error resetting data:", error);
             Alert.alert(t("error"), t("errorOccurred"), [{ text: "OK" }]);
@@ -187,125 +138,167 @@ export default function SettingsScreen() {
   };
 
   const handleCurrencyChange = (currencyCode: string) => {
-    // Close the currency selector
     setCurrencySelectorVisible(false);
 
-    // If the selected currency is the same as current, do nothing
     if (currencyCode === baseCurrency) {
       return;
     }
 
-    // If user has budget data, show warning and force reset
     if (income > 0 || categories.length > 0 || transactions.length > 0) {
-      Alert.alert(t("changeCurrencyTitle"), t("changeCurrencyWarning"), [
+      Alert.alert(t("currency"), t("errorOccurred"), [
         {
           text: t("cancel"),
           style: "cancel",
         },
         {
-          text: t("resetAndChange"),
+          text: t("delete"),
           style: "destructive",
           onPress: () => {
-            // Reset all data and change currency
             setBaseCurrency(currencyCode);
             setIncome(0);
 
-            // Delete all categories (which will also delete all transactions)
             const categoriesToDelete = [...categories];
             categoriesToDelete.forEach((category) => {
               deleteCategory(category.id);
             });
 
-            Alert.alert(
-              t("currencyChanged"),
-              t("currencyChangedAndDataReset").replace(
-                "{currency}",
-                currencyCode
-              ),
-              [{ text: "OK" }]
-            );
+            Alert.alert(t("success"), t("success"), [{ text: "OK" }]);
           },
         },
       ]);
     } else {
-      // If no budget data, just change the currency
       setBaseCurrency(currencyCode);
 
-      Alert.alert(
-        t("currencyChanged"),
-        t("currencyChangeApplied").replace("{currency}", currencyCode),
-        [{ text: "OK" }]
-      );
+      Alert.alert(t("success"), t("success"), [{ text: "OK" }]);
     }
+  };
+
+  const handleLogout = () => {
+    Alert.alert(t("logout"), t("areYouSureToLogout"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("logout"),
+        style: "destructive",
+        onPress: () => {
+          logout();
+          router.replace("../login");
+        },
+      },
+    ]);
+  };
+
+  const handleLogin = () => {
+    router.push("../login");
+  };
+
+  const handleSubscription = () => {
+    router.push("../subscription");
+  };
+
+  const handleToggleNotifications = () => {
+    setNotificationSettingsVisible(true);
   };
 
   const handleExportData = async () => {
     setIsExporting(true);
 
     try {
-      // Prepare data for export
-      const exportData = {
-        income,
-        categories,
-        transactions,
-        baseCurrency,
-        exportDate: new Date().toISOString(),
-        appVersion: "1.0.0",
-      };
+      // Create worksheets for different data types
+      const summaryData = [
+        ["TrackBudgetPro Export"],
+        ["Date", new Date().toLocaleString()],
+        ["App Version", "1.0.0"],
+        ["Base Currency", baseCurrency],
+        ["Total Income", income],
+        ["Categories Count", categories.length],
+        ["Transactions Count", transactions.length],
+      ];
 
-      // Convert to JSON
-      const jsonData = JSON.stringify(exportData, null, 2);
+      const categoriesData = [
+        ["ID", "Name", "Budget", "Color", "Icon"],
+        ...categories.map((category: (typeof categories)[0]) => [
+          category.id,
+          category.name,
+          category.budget,
+          category.color,
+          category.icon,
+        ]),
+      ];
+
+      const transactionsData = [
+        ["ID", "Category", "Amount", "Description", "Date", "Currency", "Type"],
+        ...transactions.map((transaction: (typeof transactions)[0]) => {
+          const category = categories.find(
+            (c: (typeof categories)[0]) => c.id === transaction.categoryId
+          );
+          return [
+            transaction.id,
+            category ? category.name : "Unknown",
+            transaction.amount,
+            transaction.description,
+            new Date(transaction.date).toLocaleString(),
+            transaction.currency || baseCurrency,
+            transaction.type || "expense",
+          ];
+        }),
+      ];
+
+      // Create workbook with multiple sheets
+      const wb = XLSX.utils.book_new();
+
+      // Add worksheets
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+
+      const categoriesSheet = XLSX.utils.aoa_to_sheet(categoriesData);
+      XLSX.utils.book_append_sheet(wb, categoriesSheet, "Categories");
+
+      const transactionsSheet = XLSX.utils.aoa_to_sheet(transactionsData);
+      XLSX.utils.book_append_sheet(wb, transactionsSheet, "Transactions");
+
+      // Get the current date for the filename
+      const currentDate = new Date().toISOString().slice(0, 10);
 
       if (Platform.OS === "web") {
-        // For web, create a downloadable blob
-        const blob = new Blob([jsonData], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `budget_tracker_export_${new Date()
-          .toISOString()
-          .slice(0, 10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // For web, create a downloadable blob using XLSX writeFile
+        XLSX.writeFile(wb, `trackbudgetpro_export_${currentDate}.xlsx`);
 
         setIsExporting(false);
-        Alert.alert(
-          t("exportSuccess"),
-          t("dataExportedSuccessfully").replace("{type}", "Budget"),
-          [{ text: "OK" }]
-        );
+        Alert.alert("Export Success", "Data exported successfully to Excel", [
+          { text: "OK" },
+        ]);
       } else {
         // For mobile, save to file then share
-        const fileUri = `${
-          FileSystem.documentDirectory
-        }budget_tracker_export_${new Date().toISOString().slice(0, 10)}.json`;
+        const excelBuffer = XLSX.write(wb, {
+          bookType: "xlsx",
+          type: "base64",
+        });
 
-        await FileSystem.writeAsStringAsync(fileUri, jsonData, {
-          encoding: FileSystem.EncodingType.UTF8,
+        const fileUri = `${FileSystem.documentDirectory}trackbudgetpro_export_${currentDate}.xlsx`;
+
+        await FileSystem.writeAsStringAsync(fileUri, excelBuffer, {
+          encoding: FileSystem.EncodingType.Base64,
         });
 
         // Share the file
         const shareResult = await Share.share({
           url: fileUri,
-          title: "Budget Tracker Data Export",
+          title: "TrackBudgetPro Excel Export",
         });
 
         setIsExporting(false);
 
         if (shareResult.action !== Share.dismissedAction) {
-          Alert.alert(
-            t("exportSuccess"),
-            t("dataExportedSuccessfully").replace("{type}", "Budget"),
-            [{ text: "OK" }]
-          );
+          Alert.alert("Export Success", "Data exported successfully to Excel", [
+            { text: "OK" },
+          ]);
         }
       }
     } catch (error) {
       console.error("Export error:", error);
-      setIsExporting(false);
       Alert.alert(t("error"), t("errorOccurred"), [{ text: "OK" }]);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -313,7 +306,8 @@ export default function SettingsScreen() {
     setIsImporting(true);
 
     try {
-      // Pick a document
+      // We currently only support JSON imports for backward compatibility
+      // Excel files will be export-only for now
       const result = await DocumentPicker.getDocumentAsync({
         type: "application/json",
         copyToCacheDirectory: true,
@@ -341,429 +335,458 @@ export default function SettingsScreen() {
       }
 
       // Confirm import
-      Alert.alert(t("importData"), t("importDataConfirmation"), [
-        {
-          text: t("cancel"),
-          style: "cancel",
-          onPress: () => setIsImporting(false),
-        },
-        {
-          text: t("import"),
-          onPress: () => {
-            // Reset current data
-            resetBudgetData();
-
-            // Import new data
-            setIncome(importedData.income);
-            setBaseCurrency(importedData.baseCurrency || "USD");
-
-            // Import categories
-            importedData.categories.forEach((category: any) => {
-              useBudgetStore.getState().addCategory({
-                name: category.name,
-                budget: category.budget,
-                color: category.color,
-                icon: category.icon,
-              });
-            });
-
-            // Import transactions
-            importedData.transactions.forEach((transaction: any) => {
-              useBudgetStore.getState().addTransaction({
-                categoryId: transaction.categoryId,
-                amount: transaction.amount,
-                description: transaction.description,
-                currency: transaction.currency,
-              });
-            });
-
-            setIsImporting(false);
-
-            Alert.alert(t("importSuccess"), t("dataImportedSuccessfully"), [
-              { text: "OK" },
-            ]);
+      Alert.alert(
+        "Import Data",
+        "This will replace your current data. Are you sure?",
+        [
+          {
+            text: t("cancel"),
+            style: "cancel",
+            onPress: () => setIsImporting(false),
           },
-        },
-      ]);
+          {
+            text: "Import",
+            onPress: () => {
+              // Reset current data
+              resetBudgetData();
+
+              // Import new data
+              setIncome(importedData.income);
+              setBaseCurrency(importedData.baseCurrency || "USD");
+
+              // Import categories
+              importedData.categories.forEach((category: any) => {
+                useBudgetStore.getState().addCategory({
+                  name: category.name,
+                  budget: category.budget,
+                  color: category.color,
+                  icon: category.icon,
+                });
+              });
+
+              // Import transactions
+              importedData.transactions.forEach((transaction: any) => {
+                useBudgetStore.getState().addTransaction({
+                  userId: user?.id || "anonymous",
+                  categoryId: transaction.categoryId,
+                  amount: transaction.amount,
+                  description: transaction.description,
+                  date: transaction.date,
+                  currency: transaction.currency,
+                  type: transaction.type || "expense", // Handle legacy data without type
+                });
+              });
+
+              setIsImporting(false);
+
+              Alert.alert("Import Success", "Data imported successfully", [
+                { text: "OK" },
+              ]);
+            },
+          },
+        ]
+      );
     } catch (error) {
       console.error("Import error:", error);
+      Alert.alert(t("error"), "Invalid import file", [{ text: "OK" }]);
+    } finally {
       setIsImporting(false);
-      Alert.alert(t("error"), t("invalidImportFile"), [{ text: "OK" }]);
     }
   };
 
-  const handleToggleNotifications = () => {
-    setNotificationsEnabled(!notificationsEnabled);
-
-    // In a real app, you would register/unregister for push notifications here
-    Alert.alert(
-      notificationsEnabled
-        ? t("notificationsDisabled")
-        : t("notificationsEnabled"),
-      notificationsEnabled
-        ? t("notificationsDisabledMessage")
-        : t("notificationsEnabledMessage"),
-      [{ text: "OK" }]
-    );
+  const handleRetry = () => {
+    if (!isSubscribed) {
+      // Navigate to subscription page
+      router.push("../subscription");
+    } else {
+      Alert.alert(
+        t("alreadySubscribed") || "Already Subscribed",
+        "You already have an active subscription.",
+        [{ text: "OK" }]
+      );
+    }
   };
-
-  const handleHelpAndSupport = () => {
-    // In a real app, this would open a help center or support chat
-    Alert.alert(t("helpAndSupport"), t("helpAndSupportMessage"), [
-      { text: t("cancel") },
-      {
-        text: t("contactSupport"),
-        onPress: () => {
-          // Open email app with your support email
-          Linking.openURL(
-            "mailto:Alhajeri-trackbudget@pm.me?subject=Help%20Request"
-          );
-        },
-      },
-      {
-        text: t("visitFAQ"),
-        onPress: () => {
-          // Open FAQ website
-          Linking.openURL("https://example.com/faq");
-        },
-      },
-    ]);
-  };
-
-  const handleAbout = () => {
-    Alert.alert(t("aboutBudgetTracker"), t("aboutAppDescription"), [
-      { text: "OK" },
-      {
-        text: t("privacyPolicy"),
-        onPress: () => {
-          Linking.openURL("https://example.com/privacy");
-        },
-      },
-      {
-        text: t("termsOfService"),
-        onPress: () => {
-          Linking.openURL("https://example.com/terms");
-        },
-      },
-    ]);
-  };
-
-  const handleLogout = () => {
-    Alert.alert(t("logout"), t("areYouSureToLogout"), [
-      { text: t("cancel"), style: "cancel" },
-      {
-        text: t("logout"),
-        style: "destructive",
-        onPress: () => {
-          clearAuth(); // Changed logout() to clearAuth()
-          router.replace("/login");
-        },
-      },
-    ]);
-  };
-
-  const handleLogin = () => {
-    router.push("/login");
-  };
-
-  const SettingItem = ({
-    icon,
-    title,
-    subtitle,
-    onPress,
-    rightElement,
-    testID,
-  }: {
-    icon: React.ReactNode;
-    title: string;
-    subtitle?: string;
-    onPress?: () => void;
-    rightElement?: React.ReactNode;
-    testID?: string;
-  }) => (
-    <Pressable
-      style={[
-        styles.settingItem,
-        { borderBottomColor: colors.border },
-        isRTL && styles.settingItemRTL,
-      ]}
-      onPress={onPress}
-      disabled={!onPress}
-      testID={testID}
-    >
-      <View
-        style={[styles.settingIcon, { backgroundColor: `${colors.primary}20` }]}
-      >
-        {icon}
-      </View>
-      <View style={styles.settingContent}>
-        <Text style={[styles.settingTitle, { color: colors.text }]}>
-          {title}
-        </Text>
-        {subtitle && (
-          <Text style={[styles.settingSubtitle, { color: colors.subtext }]}>
-            {subtitle}
-          </Text>
-        )}
-      </View>
-      {rightElement ||
-        (onPress && (
-          <AntDesign name="right" size={20} color={colors.subtext} />
-        ))}
-    </Pressable>
-  );
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={isRTL ? { alignItems: "flex-end" } : undefined}
-    >
-      {/* Account Section */}
-      <View style={[styles.section, isRTL && styles.sectionRTL]}>
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
-          {t("account")}
-        </Text>
-        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-          {isAuthenticated ? (
-            <>
-              <SettingItem
-                icon={
-                  <AntDesign name="user" size={20} color={colors.primary} />
-                }
-                title={user?.name || t("user")}
-                subtitle={user?.email || ""}
-                testID="user-profile"
-              />
-              {userRole === "admin" && (
+    <>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={[
+          { paddingVertical: 16 },
+          isRTL ? { alignItems: "flex-end" } : undefined,
+        ]}
+      >
+        {/* Account Section */}
+        <View style={[styles.section, isRTL && styles.sectionRTL]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {t("user").toUpperCase()}
+          </Text>
+          <View
+            style={[
+              styles.sectionContent,
+              { backgroundColor: colors.card },
+              Shadows.medium as any,
+            ]}
+          >
+            {isAuthenticated ? (
+              <>
                 <SettingItem
-                  icon={
-                    <Feather name="shield" size={20} color={colors.primary} />
+                  icon={<User size={20} color={colors.primary} />}
+                  title={user?.name || t("user")}
+                  subtitle={user?.email || ""}
+                  testID="user-profile"
+                  rightElement={
+                    userRole === "admin" ? (
+                      <View
+                        style={{
+                          backgroundColor: colors.primary,
+                          borderRadius: 12,
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                          flexDirection: "row",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Shield
+                          size={12}
+                          color="#fff"
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text
+                          style={{
+                            color: "#fff",
+                            fontWeight: "600",
+                            fontSize: 10,
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Admin
+                        </Text>
+                      </View>
+                    ) : null
                   }
-                  title={t("adminPanel")}
-                  subtitle={t("accessAdminControls")}
-                  onPress={() => router.push("/(tabs)/admin")}
-                  testID="admin-panel"
                 />
-              )}
+                <SettingItem
+                  icon={<LogOut size={20} color={colors.danger} />}
+                  title={t("logout")}
+                  subtitle={t("logout")}
+                  onPress={handleLogout}
+                  testID="logout-button"
+                />
+              </>
+            ) : (
               <SettingItem
-                icon={
-                  <MaterialIcons
-                    name="logout"
-                    size={20}
-                    color={colors.danger}
-                  />
-                }
-                title={t("logout")}
-                subtitle={t("signOutOfYourAccount")}
-                onPress={handleLogout}
-                testID="logout-button"
+                icon={<User size={20} color={colors.primary} />}
+                title={t("login")}
+                subtitle={t("email")}
+                onPress={handleLogin}
+                testID="login-button"
               />
-            </>
-          ) : (
+            )}
+          </View>
+        </View>
+        {/* Admin Panel Access */}
+        {userRole === "admin" && (
+          <View style={[styles.section, isRTL && styles.sectionRTL]}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: colors.subtext },
+                Typography.caption,
+              ]}
+            >
+              ADMIN
+            </Text>
+            <View
+              style={[
+                styles.sectionContent,
+                { backgroundColor: colors.card },
+                Shadows.medium as any,
+              ]}
+            >
+              <SettingItem
+                icon={<Shield size={20} color={colors.primary} />}
+                title="Admin Panel"
+                subtitle="Access admin features"
+                onPress={() => router.push("/(admin)")}
+                testID="admin-panel-button"
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Subscription Section */}
+        <View style={[styles.section, isRTL && styles.sectionRTL]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {"SUBSCRIPTION"}
+          </Text>
+          <View
+            style={[
+              styles.sectionContent,
+              { backgroundColor: colors.card },
+              Shadows.medium as any,
+            ]}
+          >
             <SettingItem
-              icon={<AntDesign name="user" size={20} color={colors.primary} />}
-              title={t("loginSignUp")}
-              subtitle={t("accessYourAccount")}
-              onPress={handleLogin}
-              testID="login-button"
+              icon={<DollarSign size={20} color={colors.primary} />}
+              title={t("subscriptionStatus") || "Subscription Status"}
+              subtitle={
+                isSubscribed
+                  ? subscriptionExpiry
+                    ? `${t("activeUntil") || "Active until"} ${new Date(
+                        subscriptionExpiry as string
+                      ).toLocaleDateString()}`
+                    : t("subscribed") || "Subscribed"
+                  : t("notSubscribed") || "Not Subscribed"
+              }
+              onPress={handleSubscription}
+              testID="subscription-status"
             />
-          )}
+          </View>
         </View>
-      </View>
 
-      <View style={[styles.section, isRTL && styles.sectionRTL]}>
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
-          {t("appSettings")}
-        </Text>
-        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-          <SettingItem
-            icon={<Feather name="bell" size={20} color={colors.primary} />}
-            title={t("notifications")}
-            subtitle={t("manageBudgetAlerts")}
-            rightElement={
-              <Switch
-                trackColor={{
-                  false: colors.border,
-                  true: `${colors.primary}80`,
-                }}
-                thumbColor={notificationsEnabled ? colors.primary : "#f4f3f4"}
-                value={notificationsEnabled}
-                onValueChange={handleToggleNotifications}
-                testID="notifications-toggle"
-              />
-            }
-            testID="notifications-setting"
-          />
-          <SettingItem
-            icon={<Feather name="moon" size={20} color={colors.primary} />}
-            title={t("darkMode")}
-            rightElement={
-              <Switch
-                trackColor={{
-                  false: colors.border,
-                  true: `${colors.primary}80`,
-                }}
-                thumbColor={isDark ? colors.primary : "#f4f3f4"}
-                value={isDark}
-                onValueChange={toggleTheme}
-                testID="theme-toggle"
-              />
-            }
-            testID="dark-mode-setting"
-          />
-          <SettingItem
-            icon={<Feather name="globe" size={20} color={colors.primary} />}
-            title={t("language")}
-            subtitle={language === "en" ? "English" : "العربية"}
-            onPress={() => setLanguageSelectorVisible(true)}
-            testID="language-setting"
-          />
-          <SettingItem
-            icon={
-              <FontAwesome name="dollar" size={20} color={colors.primary} />
-            }
-            title={t("baseCurrency")}
-            subtitle={`${t("current")}: ${baseCurrency}`}
-            onPress={() => setCurrencySelectorVisible(true)}
-            testID="currency-setting"
-          />
+        <View style={[styles.section, isRTL && styles.sectionRTL]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {t("settings").toUpperCase()}
+          </Text>
+          <View
+            style={[
+              styles.sectionContent,
+              { backgroundColor: colors.card },
+              Shadows.medium as any,
+            ]}
+          >
+            <SettingItem
+              icon={<Bell size={20} color={colors.primary} />}
+              title={t("notifications")}
+              subtitle={t("notification")}
+              onPress={handleToggleNotifications}
+              testID="notifications-setting"
+            />
+            <SettingItem
+              icon={
+                theme === "dark" ? (
+                  <Moon size={20} color={colors.primary} />
+                ) : theme === "light" ? (
+                  <Sun size={20} color={colors.primary} />
+                ) : (
+                  <Sun size={20} color={colors.primary} />
+                )
+              }
+              title={t("theme")}
+              subtitle={
+                theme === "dark"
+                  ? t("darkTheme")
+                  : theme === "light"
+                  ? t("lightTheme")
+                  : t("systemTheme")
+              }
+              onPress={toggleTheme}
+              testID="theme-setting"
+            />
+            <SettingItem
+              icon={<Globe size={20} color={colors.primary} />}
+              title={t("language")}
+              subtitle={language === "en" ? "English" : "العربية"}
+              onPress={() => setLanguageSelectorVisible(true)}
+              testID="language-setting"
+            />
+            <SettingItem
+              icon={<DollarSign size={20} color={colors.primary} />}
+              title={t("currency")}
+              subtitle={baseCurrency}
+              onPress={() => setCurrencySelectorVisible(true)}
+              testID="currency-setting"
+            />
+          </View>
         </View>
-      </View>
 
-      <View style={[styles.section, isRTL && styles.sectionRTL]}>
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
-          {t("budgetData")}
-        </Text>
-        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-          <SettingItem
-            icon={
-              <AntDesign name="infocirlceo" size={20} color={colors.primary} />
-            }
-            title={t("budgetSummary")}
-            subtitle={`${t("income")}: ${baseCurrency} ${income.toFixed(
-              2
-            )} • ${t("categories")}: ${categories.length}`}
-            testID="budget-summary"
-          />
-          <SettingItem
-            icon={<Feather name="trash-2" size={20} color={colors.danger} />}
-            title={t("resetAllData")}
-            subtitle={t("deleteAllBudgetInfo")}
-            onPress={resetAllData}
-            testID="reset-data-button"
-          />
+        <View style={[styles.section, isRTL && styles.sectionRTL]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {"BUDGET DATA"}
+          </Text>
+          <View
+            style={[
+              styles.sectionContent,
+              { backgroundColor: colors.card },
+              Shadows.medium as any,
+            ]}
+          >
+            <SettingItem
+              icon={<Info size={20} color={colors.primary} />}
+              title={"Budget Summary"}
+              subtitle={`${t("income")}: ${baseCurrency} ${income.toFixed(
+                2
+              )} • ${t("categories")}: ${categories.length}`}
+              testID="budget-summary"
+            />
+            <SettingItem
+              icon={<Trash2 size={20} color={colors.danger} />}
+              title={"Reset All Data"}
+              subtitle={"Delete all budget information"}
+              onPress={resetAllData}
+              testID="reset-data-button"
+            />
+          </View>
         </View>
-      </View>
 
-      <View style={[styles.section, isRTL && styles.sectionRTL]}>
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
-          {t("dataManagement")}
-        </Text>
-        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-          <SettingItem
-            icon={<Feather name="download" size={20} color={colors.primary} />}
-            title={t("exportData")}
-            subtitle={t("saveYourBudgetData")}
-            onPress={handleExportData}
-            rightElement={
-              isExporting ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : undefined
-            }
-            testID="export-data-button"
-          />
-          <SettingItem
-            icon={<Feather name="upload" size={20} color={colors.primary} />}
-            title={t("importData")}
-            subtitle={t("restoreYourBudgetData")}
-            onPress={handleImportData}
-            rightElement={
-              isImporting ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : undefined
-            }
-            testID="import-data-button"
-          />
+        <View style={[styles.section, isRTL && styles.sectionRTL]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {"DATA MANAGEMENT"}
+          </Text>
+          <View
+            style={[
+              styles.sectionContent,
+              { backgroundColor: colors.card },
+              Shadows.medium as any,
+            ]}
+          >
+            <SettingItem
+              icon={<Download size={20} color={colors.primary} />}
+              title={t("exportData") || "Export Data"}
+              subtitle={"Export to Excel spreadsheet"}
+              onPress={handleExportData}
+              rightElement={
+                isExporting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : undefined
+              }
+              testID="export-data-button"
+            />
+            <SettingItem
+              icon={<Upload size={20} color={colors.primary} />}
+              title={t("importData") || "Import Data"}
+              subtitle={"Restore your budget data"}
+              onPress={handleImportData}
+              rightElement={
+                isImporting ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : undefined
+              }
+              testID="import-data-button"
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Subscription Section (In-App Purchase) */}
-      <View style={[styles.section, isRTL && styles.sectionRTL]}>
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
-          Subscription (In-App)
-        </Text>
-        <InAppSubscriptionSection />
-      </View>
-
-      <View style={[styles.section, isRTL && styles.sectionRTL]}>
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
-          {t("feedback")}
-        </Text>
-        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-          <SettingItem
-            icon={
-              <Feather name="message-square" size={20} color={colors.primary} />
-            }
-            title={t("sendFeedback")}
-            subtitle={t("requestFeaturesReportIssues")}
-            onPress={() => setFeedbackModalVisible(true)}
-            testID="feedback-button"
-          />
+        <View style={[styles.section, isRTL && styles.sectionRTL]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {t("feedback")?.toUpperCase() || "FEEDBACK"}
+          </Text>
+          <View
+            style={[
+              styles.sectionContent,
+              { backgroundColor: colors.card },
+              Shadows.medium as any,
+            ]}
+          >
+            <SettingItem
+              icon={<MessageSquare size={20} color={colors.primary} />}
+              title={t("sendFeedback") || "Send Feedback"}
+              subtitle={t("feedbackMessage") || "Help us improve the app"}
+              onPress={() => setFeedbackModalVisible(true)}
+              testID="feedback-button"
+            />
+          </View>
         </View>
-      </View>
 
-      <View style={[styles.section, isRTL && styles.sectionRTL]}>
-        <Text style={[styles.sectionTitle, { color: colors.subtext }]}>
-          {t("about")}
-        </Text>
-        <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
-          <SettingItem
-            icon={
-              <AntDesign
-                name="questioncircleo"
-                size={20}
-                color={colors.primary}
-              />
-            }
-            title={t("helpAndSupport")}
-            onPress={handleHelpAndSupport}
-            testID="help-button"
-          />
-          <SettingItem
-            icon={
-              <AntDesign name="infocirlceo" size={20} color={colors.primary} />
-            }
-            title={t("aboutBudgetTracker")}
-            subtitle={`${t("version")} 1.0.0`}
-            onPress={handleAbout}
-            testID="about-button"
-          />
+        <View style={[styles.section, isRTL && styles.sectionRTL]}>
+          <Text
+            style={[
+              styles.sectionTitle,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {t("about").toUpperCase() || "ABOUT"}
+          </Text>
+          <View
+            style={[
+              styles.sectionContent,
+              { backgroundColor: colors.card },
+              Shadows.medium as any,
+            ]}
+          >
+            <SettingItem
+              icon={<Info size={20} color={colors.primary} />}
+              title={"About TrackBudgetPro"}
+              subtitle={`${t("version") || "Version"} 1.0.0 • AlhajeriTech`}
+              testID="about-button"
+            />
+          </View>
         </View>
-      </View>
 
-      <View style={styles.footer}>
-        <Text style={[styles.footerText, { color: colors.subtext }]}>
-          {t("appName")} • {t("madeWithLove")}
-        </Text>
-      </View>
+        <View style={styles.footer}>
+          <Text
+            style={[
+              styles.footerText,
+              { color: colors.subtext },
+              Typography.caption,
+            ]}
+          >
+            {t("appName")} • {t("appVersion")} • © AlhajeriTech
+          </Text>
+        </View>
 
-      <FeedbackModal
-        visible={feedbackModalVisible}
-        onClose={() => setFeedbackModalVisible(false)}
-      />
+        {/* Modals */}
+        <FeedbackModal
+          visible={feedbackModalVisible}
+          onClose={() => setFeedbackModalVisible(false)}
+        />
 
-      <CurrencySelector
-        visible={currencySelectorVisible}
-        onClose={() => setCurrencySelectorVisible(false)}
-        onSelect={handleCurrencyChange}
-        selectedCurrency={baseCurrency}
-      />
+        <CurrencySelector
+          visible={currencySelectorVisible}
+          onClose={() => setCurrencySelectorVisible(false)}
+          onSelect={handleCurrencyChange}
+          selectedCurrency={baseCurrency}
+        />
 
-      <LanguageSelector
-        visible={languageSelectorVisible}
-        onClose={() => setLanguageSelectorVisible(false)}
-      />
-    </ScrollView>
+        <LanguageSelector
+          visible={languageSelectorVisible}
+          onClose={() => setLanguageSelectorVisible(false)}
+        />
+
+        <NotificationSettings
+          visible={notificationSettingsVisible}
+          onClose={() => setNotificationSettingsVisible(false)}
+        />
+      </ScrollView>
+    </>
   );
 }
 
@@ -780,13 +803,14 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
-    marginBottom: 8,
-    marginTop: 16,
+    marginBottom: 12,
+    marginLeft: 8,
+    letterSpacing: 0.5,
   },
   sectionContent: {
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: "hidden",
     width: "100%",
   },
@@ -801,8 +825,8 @@ const styles = StyleSheet.create({
     flexDirection: "row-reverse",
   },
   settingIcon: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
@@ -814,7 +838,6 @@ const styles = StyleSheet.create({
   settingTitle: {
     fontSize: 16,
     fontWeight: "500",
-    marginBottom: 2,
   },
   settingSubtitle: {
     fontSize: 14,
@@ -823,8 +846,19 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     width: "100%",
+    marginTop: 8,
   },
   footerText: {
     fontSize: 14,
+    opacity: 0.8,
+  },
+  option: {
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 8,
+  },
+  optionText: {
+    fontSize: 16,
+    fontWeight: "500",
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,11 @@ import {
   Alert,
 } from "react-native";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
-import { AntDesign } from "@expo/vector-icons";
-import TransactionItem from "@/components/TransactionItem";
-import AddTransactionModal from "@/components/AddTransactionModal";
-import useBudgetStore from "@/store/budget-store";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import { Plus, Trash2 } from "lucide-react-native";
+import TransactionItem from "../../components/TransactionItem";
+import AddTransactionModal from "../../components/AddTransactionModal";
+import useBudgetStore from "../../store/budget-store";
+import useAppTheme from "../../hooks/useAppTheme";
 
 export default function CategoryDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -25,52 +24,39 @@ export default function CategoryDetailScreen() {
     deleteTransaction,
     baseCurrency,
     currencies,
-    fetchBudgetFromBackend,
-    selectedMonth,
-    deleteCategoryInBackend,
   } = useBudgetStore();
   const { colors } = useAppTheme();
-  const { t, isRTL } = useLanguageStore();
   const [modalVisible, setModalVisible] = useState(false);
 
-  const category = categories.find((c) => c.id === id);
+  // Find category but don't conditionally return if not found
+  const category = categories.find((c: any) => c.id === id);
+  const categoryFound = !!category;
 
-  if (!category) {
-    return (
-      <View style={[styles.notFound, { backgroundColor: colors.background }]}>
-        <Text style={[styles.notFoundText, { color: colors.text }]}>
-          {t("category")} not found
-        </Text>
-        <Pressable
-          style={[styles.backButton, { backgroundColor: colors.primary }]}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.backButtonText}>{t("cancel")}</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  // Get transactions for this category in the selected month
-  const categoryTransactions = transactions
-    .filter((t) => t.categoryId === id && t.date.startsWith(selectedMonth))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // Get transactions for this category - safely handle missing category
+  const categoryTransactions = categoryFound
+    ? transactions
+        .filter((t) => t.categoryId === id)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    : [];
 
   const handleDeleteCategory = () => {
+    if (!categoryFound) return;
+
     Alert.alert(
-      t("delete"),
-      `Are you sure you want to delete ${category.name}?`,
+      "Delete Category",
+      `Are you sure you want to delete "${
+        category!.name
+      }"? This will also delete all transactions in this category.`,
       [
         {
-          text: t("cancel"),
+          text: "Cancel",
           style: "cancel",
         },
         {
-          text: t("delete"),
+          text: "Delete",
           style: "destructive",
-          onPress: async () => {
-            // Use deleteCategoryInBackend to ensure proper server sync
-            await deleteCategoryInBackend?.(id);
+          onPress: () => {
+            deleteCategory(id);
             router.back();
           },
         },
@@ -78,178 +64,209 @@ export default function CategoryDetailScreen() {
     );
   };
 
-  // Re-fetch data when selected month changes
-  useEffect(() => {
-    const [year, month] = selectedMonth.split("-").map(Number);
-    fetchBudgetFromBackend?.(year, month);
-  }, [selectedMonth, fetchBudgetFromBackend]);
-
+  // Safely access category properties
   const percentage =
-    category.budget > 0 ? (category.spent / category.budget) * 100 : 0;
-  const remaining = category.budget - category.spent;
+    categoryFound &&
+    category &&
+    category.budget > 0 &&
+    category.spent !== undefined
+      ? (category.spent / category.budget) * 100
+      : 0;
+  const remaining =
+    categoryFound && category && category.spent !== undefined
+      ? category.budget - category.spent
+      : 0;
   const isOverBudget = remaining < 0;
   const currencySymbol =
-    currencies.find((c) => c.code === baseCurrency)?.symbol || baseCurrency;
-
-  const handleCategoryPress = (categoryId: string) => {
-    router.push(`/category/${categoryId}`);
-  };
+    currencies.find((c: { code: string }) => c.code === baseCurrency)?.symbol ||
+    baseCurrency;
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: category.name,
+          title: categoryFound ? category!.name : "Category",
+          headerStyle: {
+            backgroundColor: colors.background,
+          },
+          headerTintColor: colors.text,
+          headerShadowVisible: false,
           headerRight: () => (
             <Pressable
               onPress={handleDeleteCategory}
-              style={styles.headerButton}
+              style={[
+                styles.headerButton,
+                { opacity: categoryFound ? 1 : 0.5 },
+              ]}
+              disabled={!categoryFound}
             >
-              <AntDesign name="delete" size={20} color={colors.danger} />
+              <Trash2 size={20} color={colors.danger} />
             </Pressable>
           ),
         }}
       />
 
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={[styles.budgetCard, { backgroundColor: colors.card }]}>
-            <View style={styles.budgetHeader}>
-              <Text style={[styles.budgetTitle, { color: colors.subtext }]}>
-                {t("monthlyBudget")}
-              </Text>
-              <Text style={[styles.budgetAmount, { color: colors.text }]}>
-                {currencySymbol}
-                {category.budget.toFixed(2)}
-              </Text>
-            </View>
+        {!categoryFound ? (
+          <View
+            style={[styles.notFound, { backgroundColor: colors.background }]}
+          >
+            <Text style={[styles.notFoundText, { color: colors.text }]}>
+              Category not found
+            </Text>
+            <Pressable
+              style={[styles.backButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.back()}
+            >
+              <Text style={styles.backButtonText}>Go Back</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.budgetCard, { backgroundColor: colors.card }]}>
+              <View style={styles.budgetHeader}>
+                <Text style={[styles.budgetTitle, { color: colors.subtext }]}>
+                  Budget
+                </Text>
+                <Text style={[styles.budgetAmount, { color: colors.text }]}>
+                  {currencySymbol}
+                  {category!.budget.toFixed(2)}
+                </Text>
+              </View>
 
-            <View style={styles.spentContainer}>
-              <Text style={[styles.spentLabel, { color: colors.subtext }]}>
-                {t("spent")}
-              </Text>
-              <Text style={[styles.spentAmount, { color: colors.text }]}>
-                {currencySymbol}
-                {category.spent.toFixed(2)}
-              </Text>
-            </View>
+              <View style={styles.spentContainer}>
+                <Text style={[styles.spentLabel, { color: colors.subtext }]}>
+                  Spent
+                </Text>
+                <Text style={[styles.spentAmount, { color: colors.text }]}>
+                  {currencySymbol}
+                  {category?.spent?.toFixed(2) || "0.00"}
+                </Text>
+              </View>
 
-            <View style={styles.progressContainer}>
-              <View
-                style={[
-                  styles.progressBackground,
-                  { backgroundColor: colors.border },
-                ]}
-              >
+              <View style={styles.progressContainer}>
                 <View
                   style={[
-                    styles.progressFill,
-                    {
-                      width: `${Math.min(percentage, 100)}%`,
-                      backgroundColor: isOverBudget
-                        ? colors.danger
-                        : category.color,
-                    },
+                    styles.progressBackground,
+                    { backgroundColor: colors.border },
                   ]}
-                />
+                >
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${Math.min(percentage, 100)}%`,
+                        backgroundColor: isOverBudget
+                          ? colors.danger
+                          : category!.color,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.remainingContainer}>
+                <Text
+                  style={[styles.remainingLabel, { color: colors.subtext }]}
+                >
+                  {isOverBudget ? "Over Budget" : "Remaining"}
+                </Text>
+                <Text
+                  style={[
+                    styles.remainingAmount,
+                    { color: colors.text },
+                    isOverBudget && { color: colors.danger },
+                  ]}
+                >
+                  {isOverBudget ? "-" : ""}
+                  {currencySymbol}
+                  {category &&
+                  category.spent !== undefined &&
+                  category.budget !== undefined
+                    ? Math.abs(category.spent - category.budget).toFixed(2)
+                    : "0.00"}
+                </Text>
               </View>
             </View>
 
-            <View style={styles.remainingContainer}>
-              <Text style={[styles.remainingLabel, { color: colors.subtext }]}>
-                {isOverBudget ? t("overBy") : t("remaining")}
+            <View style={styles.transactionsHeader}>
+              <Text style={[styles.transactionsTitle, { color: colors.text }]}>
+                Transactions
               </Text>
               <Text
-                style={[
-                  styles.remainingAmount,
-                  { color: colors.text },
-                  isOverBudget && { color: colors.danger },
-                ]}
+                style={[styles.transactionsCount, { color: colors.subtext }]}
               >
-                {isOverBudget ? "-" : ""}
-                {currencySymbol}
-                {Math.abs(remaining).toFixed(2)}
+                {categoryTransactions.length} total
               </Text>
             </View>
-          </View>
 
-          <View style={styles.transactionsHeader}>
-            <Text style={[styles.transactionsTitle, { color: colors.text }]}>
-              {t("transactions")}
-            </Text>
-            <Text style={[styles.transactionsCount, { color: colors.subtext }]}>
-              {categoryTransactions.length} {t("total")}
-            </Text>
-          </View>
-
-          {categoryTransactions.length === 0 ? (
-            <View
-              style={[
-                styles.emptyTransactions,
-                { backgroundColor: colors.card },
-              ]}
-            >
-              <Text
+            {categoryTransactions.length === 0 ? (
+              <View
                 style={[
-                  styles.emptyTransactionsText,
-                  { color: colors.subtext },
+                  styles.emptyTransactions,
+                  { backgroundColor: colors.card },
                 ]}
               >
-                {t("noTransactionsYet")}
-              </Text>
-              <Pressable
-                style={[
-                  styles.addTransactionButton,
-                  { backgroundColor: colors.primary },
-                ]}
-                onPress={() => setModalVisible(true)}
-              >
-                <Text style={styles.addTransactionButtonText}>
-                  {t("addTransaction")}
+                <Text
+                  style={[
+                    styles.emptyTransactionsText,
+                    { color: colors.subtext },
+                  ]}
+                >
+                  No transactions in this category yet.
                 </Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.transactionsList,
-                { backgroundColor: colors.card },
-              ]}
-            >
-              {categoryTransactions.map((transaction) => (
-                <TransactionItem
-                  key={transaction.id}
-                  transaction={transaction}
-                  onDelete={() => deleteTransaction(transaction.id)}
-                />
-              ))}
-            </View>
-          )}
-        </ScrollView>
+                <Pressable
+                  style={[
+                    styles.addTransactionButton,
+                    { backgroundColor: colors.primary },
+                  ]}
+                  onPress={() => setModalVisible(true)}
+                >
+                  <Text style={styles.addTransactionButtonText}>
+                    Add Transaction
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View
+                style={[
+                  styles.transactionsList,
+                  { backgroundColor: colors.card },
+                ]}
+              >
+                {categoryTransactions.map((transaction) => (
+                  <TransactionItem
+                    key={transaction.id}
+                    transaction={transaction}
+                    onDelete={() => deleteTransaction(transaction.id)}
+                  />
+                ))}
+              </View>
+            )}
+          </ScrollView>
+        )}
 
-        <View style={styles.fabContainer}>
+        <View
+          style={[
+            styles.fabContainer,
+            { display: categoryFound ? "flex" : "none" },
+          ]}
+        >
           <Pressable
             style={[styles.fab, { backgroundColor: colors.primary }]}
             onPress={() => setModalVisible(true)}
           >
-            <AntDesign name="plus" size={24} color="white" />
+            <Plus size={24} color="white" />
           </Pressable>
         </View>
 
         <AddTransactionModal
           visible={modalVisible}
-          onClose={async () => {
-            setModalVisible(false);
-            // Re-fetch budget data when the transaction modal is closed
-            if (fetchBudgetFromBackend) {
-              const [year, month] = selectedMonth.split("-").map(Number);
-              await fetchBudgetFromBackend(year, month);
-            }
-          }}
+          onClose={() => setModalVisible(false)}
           categoryId={id}
         />
       </View>

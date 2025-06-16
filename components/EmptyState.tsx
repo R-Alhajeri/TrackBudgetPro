@@ -1,8 +1,9 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { AntDesign } from "@expo/vector-icons";
-import useAppTheme from "@/hooks/useAppTheme";
-import useLanguageStore from "@/store/language-store";
+import { Plus } from "lucide-react-native";
+import useAppTheme from "../hooks/useAppTheme";
+import useLanguageStore from "../store/language-store";
+import { Shadows, Typography, PressableStates } from "../constants/styleGuide";
 
 interface EmptyStateProps {
   title: string;
@@ -21,22 +22,29 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   const { isRTL } = useLanguageStore();
 
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.content,
+          { backgroundColor: colors.card, shadowColor: colors.primary },
+        ]}
+      >
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         <Text style={[styles.description, { color: colors.subtext }]}>
           {description}
         </Text>
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.button,
-            { backgroundColor: colors.primary },
+            { backgroundColor: colors.primary, shadowColor: colors.primary },
             isRTL && styles.rtlFlexRowReverse,
+            Shadows.medium,
+            pressed && PressableStates.pressed,
           ]}
           onPress={onPress}
         >
-          <AntDesign name="plus" size={20} color="white" />
-          <Text style={styles.buttonText}>{buttonText}</Text>
+          <Plus size={20} color="white" />
+          <Text style={[styles.buttonText]}>{buttonText}</Text>
         </Pressable>
       </View>
     </View>
@@ -48,30 +56,42 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 20,
+    padding: 24,
   },
   content: {
     alignItems: "center",
-    maxWidth: 300,
+    maxWidth: 320,
+    padding: 28,
+    borderRadius: 18,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+    marginTop: 12,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginBottom: 8,
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 12,
     textAlign: "center",
+    letterSpacing: 0.1,
   },
   description: {
     fontSize: 16,
     textAlign: "center",
-    marginBottom: 24,
-    lineHeight: 22,
+    marginBottom: 28,
+    lineHeight: 24,
   },
   button: {
     flexDirection: "row",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
     alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 24,
+    shadowOpacity: 0.13,
+    shadowRadius: 6,
+    elevation: 2,
+    marginTop: 8,
   },
   rtlFlexRowReverse: {
     flexDirection: "row-reverse",

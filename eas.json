@@ -1,0 +1,44 @@
+{
+  "cli": {
+    "version": ">= 3.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "env": {
+        "NODE_ENV": "production"
+      },
+      "ios": {
+        "simulator": false,
+        "bundleIdentifier": "com.alhajeritech.trackbudgetpro",
+        "buildNumber": "1.0.0"
+      },
+      "android": {
+        "buildType": "aab",
+        "applicationId": "com.alhajeritech.trackbudgetpro",
+        "versionCode": 1
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

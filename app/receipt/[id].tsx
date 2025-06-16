@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -8,102 +8,67 @@ import {
   Pressable,
 } from "react-native";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
-import { AntDesign, Feather } from "@expo/vector-icons";
-import useBudgetStore from "@/store/budget-store";
-import useAppTheme from "@/hooks/useAppTheme";
+import { ArrowLeft, Download, Trash2 } from "lucide-react-native";
+import useBudgetStore from "../../store/budget-store";
+import useAppTheme from "../../hooks/useAppTheme";
+import useLanguageStore from "../../store/language-store";
+import { Currency } from "../../types/budget";
 
 export default function ReceiptDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const {
-    getReceiptFromBackend,
-    deleteReceiptFromBackend,
-    receipts,
-    baseCurrency,
-    currencies,
-    transactions,
-  } = useBudgetStore();
+  const { transactions, receipts, deleteReceipt, baseCurrency, currencies } =
+    useBudgetStore();
   const { colors } = useAppTheme();
+  const { t } = useLanguageStore();
 
-  const [receipt, setReceipt] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  // Find the transaction for display (local fallback)
   const transaction = transactions.find((t) => t.id === id);
+  const receiptImage = receipts[id];
   const currencySymbol =
-    currencies.find((c) => c.code === baseCurrency)?.symbol || baseCurrency;
+    currencies.find((c: Currency) => c.code === baseCurrency)?.symbol ||
+    baseCurrency;
 
-  const fetchReceipt = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await getReceiptFromBackend?.(id!);
-      setReceipt(data);
-    } catch (e) {
-      setError("Failed to load receipt");
-    } finally {
-      setLoading(false);
-    }
-  }, [id, getReceiptFromBackend]);
-
-  useEffect(() => {
-    if (id) fetchReceipt();
-  }, [id, fetchReceipt]);
-
-  const handleDeleteReceipt = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      await deleteReceiptFromBackend?.(id!);
-      router.back();
-    } catch (e) {
-      setError("Failed to delete receipt");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
+  if (!transaction || !receiptImage) {
     return (
       <View style={[styles.notFound, { backgroundColor: colors.background }]}>
         <Text style={[styles.notFoundText, { color: colors.text }]}>
-          Loading...
-        </Text>
-      </View>
-    );
-  }
-
-  if (error || !receipt) {
-    return (
-      <View style={[styles.notFound, { backgroundColor: colors.background }]}>
-        <Text style={[styles.notFoundText, { color: colors.text }]}>
-          {error || "Receipt not found"}
+          {t("somethingWentWrong")}
         </Text>
         <Pressable
           style={[styles.backButton, { backgroundColor: colors.primary }]}
           onPress={() => router.back()}
         >
-          <Text style={styles.backButtonText}>Go Back</Text>
+          <Text style={styles.backButtonText}>{t("back")}</Text>
         </Pressable>
       </View>
     );
   }
 
-  // Use receipt.data for extracted data, receipt.imageUrl for image
+  const handleDeleteReceipt = () => {
+    if (deleteReceipt) {
+      deleteReceipt(id);
+    }
+    router.back();
+  };
+
   return (
     <>
       <Stack.Screen
         options={{
-          title: "Receipt Details",
+          title: t("receipt"),
           headerRight: () => (
             <Pressable
               onPress={handleDeleteReceipt}
               style={styles.headerButton}
             >
-              <Feather name="trash-2" size={20} color={colors.danger} />
+              <Trash2 size={20} color={colors.danger} />
             </Pressable>
           ),
+          headerStyle: {
+            backgroundColor: colors.background,
+          },
+          headerTintColor: colors.text,
+          headerShadowVisible: false,
         }}
       />
 
@@ -112,24 +77,18 @@ export default function ReceiptDetailScreen() {
       >
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <Text style={[styles.transactionTitle, { color: colors.text }]}>
-            {transaction?.description || receipt.data?.merchant || "Receipt"}
+            {transaction.description}
           </Text>
           <Text style={[styles.transactionAmount, { color: colors.text }]}>
             {currencySymbol}
-            {transaction?.amount?.toFixed(2) ||
-              receipt.data?.total?.toFixed(2) ||
-              ""}
+            {transaction.amount.toFixed(2)}
           </Text>
           <Text style={[styles.transactionDate, { color: colors.subtext }]}>
-            {transaction?.date
-              ? new Date(transaction.date).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })
-              : receipt.data?.date
-              ? new Date(receipt.data.date).toLocaleDateString()
-              : ""}
+            {new Date(transaction.date).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            })}
           </Text>
         </View>
 
@@ -137,19 +96,20 @@ export default function ReceiptDetailScreen() {
           style={[styles.receiptContainer, { backgroundColor: colors.card }]}
         >
           <Image
-            source={{ uri: receipt.imageUrl }}
+            source={{ uri: receiptImage }}
             style={styles.receiptImage}
             resizeMode="contain"
           />
         </View>
 
-        {receipt.data && (
+        {transaction.receiptData && (
           <View
             style={[styles.receiptDataCard, { backgroundColor: colors.card }]}
           >
             <Text style={[styles.receiptDataTitle, { color: colors.text }]}>
-              Receipt Details
+              {t("receipt")}
             </Text>
+
             <View
               style={[
                 styles.receiptDataItem,
@@ -159,12 +119,13 @@ export default function ReceiptDetailScreen() {
               <Text
                 style={[styles.receiptDataLabel, { color: colors.subtext }]}
               >
-                Merchant
+                {t("merchant")}
               </Text>
               <Text style={[styles.receiptDataValue, { color: colors.text }]}>
-                {receipt.data.merchant || "Unknown"}
+                {transaction.receiptData.merchant || t("unknown")}
               </Text>
             </View>
+
             <View
               style={[
                 styles.receiptDataItem,
@@ -174,61 +135,64 @@ export default function ReceiptDetailScreen() {
               <Text
                 style={[styles.receiptDataLabel, { color: colors.subtext }]}
               >
-                Date
+                {t("date")}
               </Text>
               <Text style={[styles.receiptDataValue, { color: colors.text }]}>
-                {receipt.data.date
-                  ? new Date(receipt.data.date).toLocaleDateString()
-                  : "Unknown"}
+                {transaction.receiptData.date
+                  ? new Date(transaction.receiptData.date).toLocaleDateString()
+                  : t("unknown")}
               </Text>
             </View>
+
             <View style={styles.receiptDataItem}>
               <Text
                 style={[styles.receiptDataLabel, { color: colors.subtext }]}
               >
-                Total
+                {t("total")}
               </Text>
               <Text style={[styles.receiptDataValue, { color: colors.text }]}>
                 {currencySymbol}
-                {receipt.data.total?.toFixed(2) || "Unknown"}
+                {transaction.receiptData.total?.toFixed(2) || t("unknown")}
               </Text>
             </View>
-            {receipt.data.items && receipt.data.items.length > 0 && (
-              <>
-                <Text style={[styles.itemsTitle, { color: colors.text }]}>
-                  Items
-                </Text>
-                {receipt.data.items.map((item: any, index: number) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.itemRow,
-                      { borderBottomColor: colors.border },
-                    ]}
-                  >
-                    <View style={styles.itemInfo}>
-                      <Text style={[styles.itemName, { color: colors.text }]}>
-                        {item.name}
-                      </Text>
-                      {item.quantity && item.quantity > 1 && (
-                        <Text
-                          style={[
-                            styles.itemQuantity,
-                            { color: colors.subtext },
-                          ]}
-                        >
-                          x{item.quantity}
+
+            {transaction.receiptData.items &&
+              transaction.receiptData.items.length > 0 && (
+                <>
+                  <Text style={[styles.itemsTitle, { color: colors.text }]}>
+                    {t("addYourFirst")}
+                  </Text>
+                  {transaction.receiptData.items.map((item, index) => (
+                    <View
+                      key={index}
+                      style={[
+                        styles.itemRow,
+                        { borderBottomColor: colors.border },
+                      ]}
+                    >
+                      <View style={styles.itemInfo}>
+                        <Text style={[styles.itemName, { color: colors.text }]}>
+                          {item.name}
                         </Text>
-                      )}
+                        {item.quantity && item.quantity > 1 && (
+                          <Text
+                            style={[
+                              styles.itemQuantity,
+                              { color: colors.subtext },
+                            ]}
+                          >
+                            x{item.quantity}
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={[styles.itemPrice, { color: colors.text }]}>
+                        {currencySymbol}
+                        {item.price.toFixed(2)}
+                      </Text>
                     </View>
-                    <Text style={[styles.itemPrice, { color: colors.text }]}>
-                      {currencySymbol}
-                      {item.price.toFixed(2)}
-                    </Text>
-                  </View>
-                ))}
-              </>
-            )}
+                  ))}
+                </>
+              )}
           </View>
         )}
 
@@ -239,8 +203,8 @@ export default function ReceiptDetailScreen() {
               /* In a real app, implement download functionality */
             }}
           >
-            <Feather name="download" size={20} color="white" />
-            <Text style={styles.actionButtonText}>Download Receipt</Text>
+            <Download size={20} color="white" />
+            <Text style={styles.actionButtonText}>{t("exportData")}</Text>
           </Pressable>
         </View>
       </ScrollView>
